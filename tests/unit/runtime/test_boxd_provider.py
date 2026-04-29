@@ -84,6 +84,11 @@ async def test_resolve_vm_passes_config(mock_boxd, fake_box):
     # auto_suspend goes through LifecycleConfig
     assert box_config.lifecycle is not None
     assert box_config.lifecycle.auto_suspend_timeout == 30
+    # default proxy must forward to bindu's default port (3773), not boxd's
+    # default (8000), or the public URL is unreachable.
+    assert box_config.network is not None
+    assert box_config.network.proxies is not None
+    assert any(p.port == 3773 for p in box_config.network.proxies)
 
 
 # ── _ship_source ───────────────────────────────────────────────────

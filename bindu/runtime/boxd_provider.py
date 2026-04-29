@@ -32,10 +32,17 @@ def _make_compute(**kwargs: Any):
     return Compute(**kwargs)
 
 
+# The bindu default HTTP port. The boxd proxy is configured at VM creation
+# to forward the public default proxy at this port. Without this, the
+# proxy default (port 8000) does not match bindu's default (3773) and the
+# agent's public URL is unreachable.
+BINDU_DEFAULT_PORT = 3773
+
+
 class BoxdRuntimeProvider(RuntimeProvider):
     async def _resolve_vm(self, compute: Any, name: str, config: RuntimeConfig) -> Any:
         """Get or create the VM for this agent (idempotent by name)."""
-        from boxd import BoxConfig, LifecycleConfig
+        from boxd import BoxConfig, LifecycleConfig, NetworkConfig, ProxyEntry
         from boxd.errors import NotFoundError
 
         try:
@@ -49,6 +56,9 @@ class BoxdRuntimeProvider(RuntimeProvider):
             disk=config.disk,
             lifecycle=LifecycleConfig(
                 auto_suspend_timeout=config.auto_suspend,
+            ),
+            network=NetworkConfig(
+                proxies=[ProxyEntry(name="", port=BINDU_DEFAULT_PORT)],
             ),
         )
         create_kwargs: dict[str, Any] = {
