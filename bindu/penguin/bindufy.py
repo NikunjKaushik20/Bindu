@@ -624,10 +624,7 @@ def _deploy_to_runtime(
     if not agent_name:
         raise ValueError("config must include 'name' for runtime deployment")
 
-    # Find the user's entry script: it's the file that called bindufy().
-    # `caller_dir` is its parent — assume the script itself lives there.
-    source_dir = find_project_root(caller_dir / "_placeholder.py")
-
+    source_dir = find_project_root(caller_dir)
     provider = _runtime_module.get_provider(runtime_config.provider)
 
     async def _run() -> None:
@@ -660,7 +657,7 @@ async def _supervise(provider: Any, handle: Any, runtime_config: Any) -> None:
         loop.add_signal_handler(signal.SIGINT, _on_signal)
         loop.add_signal_handler(signal.SIGTERM, _on_signal)
     except NotImplementedError:
-        # Windows or restricted environments — fall back to default behavior.
+        # Windows / restricted envs lack add_signal_handler.
         pass
 
     try:
@@ -669,8 +666,10 @@ async def _supervise(provider: Any, handle: Any, runtime_config: Any) -> None:
         log_task.cancel()
         try:
             await log_task
-        except (asyncio.CancelledError, Exception):
+        except asyncio.CancelledError:
             pass
+        except Exception as e:
+            logger.warning(f"log streaming task failed: {e}")
         await provider.on_exit(handle, runtime_config.on_exit)
 
 
@@ -683,7 +682,7 @@ async def _pipe_logs(provider: Any, handle: Any) -> None:
             for line in text.splitlines():
                 print(prefix + line, flush=True)
     except Exception as e:
-        print(f"{prefix}log stream ended: {e}", flush=True)
+        logger.warning(f"{prefix}log stream ended: {e}")
 
 
 def bindufy(

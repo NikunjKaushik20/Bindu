@@ -15,9 +15,9 @@ from bindu.runtime.base import (
 )
 from bindu.runtime.config import RuntimeConfig, RuntimeConfigError
 
-# Register built-in providers on import. Both modules call register_provider()
-# at import time. Boxd's deploy()/health()/etc. lazily import the boxd SDK,
-# so importing bindu.runtime does not require `boxd` to be installed.
+# Side-effect imports: providers register themselves on import. Boxd's
+# deploy()/health()/etc. lazily import the boxd SDK, so importing
+# bindu.runtime does not require `boxd` to be installed.
 from bindu.runtime import in_process as _in_process  # noqa: F401, E402
 from bindu.runtime import boxd_provider as _boxd_provider  # noqa: F401, E402
 

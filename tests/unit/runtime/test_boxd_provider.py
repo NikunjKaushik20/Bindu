@@ -108,11 +108,13 @@ async def test_ship_source_writes_and_extracts(mock_boxd, fake_box, tmp_path):
     assert isinstance(payload, bytes)
     assert dest == "/tmp/source.tar.gz"
 
-    # mkdir + tar extract should have been exec'd into the user-writable dir
+    # mkdir + tar extract are issued as a single shell exec to save a round-trip
     exec_calls = fake_box.exec.await_args_list
-    assert any(c.args == ("mkdir", "-p", "/home/boxd/app") for c in exec_calls)
     assert any(
-        c.args == ("tar", "xzf", "/tmp/source.tar.gz", "-C", "/home/boxd/app")
+        c.args[0] == "sh"
+        and c.args[1] == "-c"
+        and "mkdir -p /home/boxd/app" in c.args[2]
+        and "tar xzf /tmp/source.tar.gz -C /home/boxd/app" in c.args[2]
         for c in exec_calls
     )
 
@@ -127,17 +129,16 @@ async def test_install_deps_with_pyproject(mock_boxd, fake_box):
 
     await p._install_deps(fake_box, has_pyproject=True, has_requirements=False)
 
-    exec_calls = fake_box.exec.await_args_list
-    # bindu must always be installed (with --break-system-packages for PEP 668)
-    assert any(
-        c.args == ("pip", "install", "--break-system-packages", "bindu")
-        for c in exec_calls
-    )
-    # And pip install -e . runs in APP_DIR via sh -c
-    assert any(
-        c.args[0] == "sh" and "pip install --break-system-packages -e ." in c.args[2]
-        for c in exec_calls
-    )
+    # All pip steps are chained into a single sh -c invocation to save round-trips.
+    install_calls = [
+        c
+        for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "pip install" in c.args[2]
+    ]
+    assert len(install_calls) == 1
+    cmd = install_calls[0].args[2]
+    assert "pip install --break-system-packages bindu" in cmd
+    assert "pip install --break-system-packages -e ." in cmd
 
 
 @pytest.mark.asyncio
@@ -147,17 +148,15 @@ async def test_install_deps_with_requirements(mock_boxd, fake_box):
 
     await p._install_deps(fake_box, has_pyproject=False, has_requirements=True)
 
-    exec_calls = fake_box.exec.await_args_list
-    assert any(
-        c.args
-        == (
-            "pip",
-            "install",
-            "--break-system-packages",
-            "-r",
-            "/home/boxd/app/requirements.txt",
-        )
-        for c in exec_calls
+    install_calls = [
+        c
+        for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "pip install" in c.args[2]
+    ]
+    assert len(install_calls) == 1
+    cmd = install_calls[0].args[2]
+    assert (
+        "pip install --break-system-packages -r /home/boxd/app/requirements.txt" in cmd
     )
 
 
@@ -173,10 +172,14 @@ async def test_install_deps_pinned_bindu_version(mock_boxd, fake_box):
         bindu_version="0.2.5",
     )
 
-    exec_calls = fake_box.exec.await_args_list
-    assert any(
-        c.args == ("pip", "install", "--break-system-packages", "bindu==0.2.5")
-        for c in exec_calls
+    install_calls = [
+        c
+        for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "pip install" in c.args[2]
+    ]
+    assert len(install_calls) == 1
+    assert (
+        "pip install --break-system-packages bindu==0.2.5" in install_calls[0].args[2]
     )
 
 
@@ -353,7 +356,9 @@ async def test_deploy_a2_full_flow(
 
     fake_box.write_file.assert_awaited_once()
     pip_calls = [
-        c for c in fake_box.exec.await_args_list if c.args and c.args[0] == "pip"
+        c
+        for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "pip install" in c.args[2]
     ]
     assert pip_calls, "pip install should have been called"
     serve_calls = [
@@ -387,7 +392,9 @@ async def test_deploy_a1_skips_source(mock_boxd, fake_box, fake_health, boxd_api
     assert handle.url == "https://my-agent.boxd.sh"
     fake_box.write_file.assert_not_awaited()
     pip_calls = [
-        c for c in fake_box.exec.await_args_list if c.args and c.args[0] == "pip"
+        c
+        for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "pip install" in c.args[2]
     ]
     assert not pip_calls
 
