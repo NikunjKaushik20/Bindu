@@ -33,9 +33,7 @@ def _make_compute(**kwargs: Any):
 
 
 class BoxdRuntimeProvider(RuntimeProvider):
-    async def _resolve_vm(
-        self, compute: Any, name: str, config: RuntimeConfig
-    ) -> Any:
+    async def _resolve_vm(self, compute: Any, name: str, config: RuntimeConfig) -> Any:
         """Get or create the VM for this agent (idempotent by name)."""
         from boxd import BoxConfig, LifecycleConfig
         from boxd.errors import NotFoundError
@@ -66,9 +64,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
         blob = build_tarball(source_dir)
         await box.write_file(blob, "/tmp/source.tar.gz")
         await box.exec("mkdir", "-p", "/app")
-        result = await box.exec(
-            "tar", "xzf", "/tmp/source.tar.gz", "-C", "/app"
-        )
+        result = await box.exec("tar", "xzf", "/tmp/source.tar.gz", "-C", "/app")
         if getattr(result, "exit_code", 0) != 0:
             stderr = getattr(result, "stderr", "")
             raise RuntimeError(f"failed to extract source in VM: {stderr}")
@@ -91,9 +87,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
             result = await box.exec(*cmd)
             if getattr(result, "exit_code", 0) != 0:
                 stderr = getattr(result, "stderr", "")
-                raise RuntimeError(
-                    f"command {cmd} failed in VM: {stderr}"
-                )
+                raise RuntimeError(f"command {cmd} failed in VM: {stderr}")
 
     async def _start_agent(
         self,
@@ -131,9 +125,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
                 except httpx.HTTPError:
                     pass
                 await asyncio.sleep(1.0)
-        raise TimeoutError(
-            f"agent at {url} did not become healthy within {timeout}s"
-        )
+        raise TimeoutError(f"agent at {url} did not become healthy within {timeout}s")
 
     @staticmethod
     def _detect_script_name(source_dir: Path) -> str:

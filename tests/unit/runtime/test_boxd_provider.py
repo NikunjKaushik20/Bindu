@@ -1,11 +1,14 @@
 """Tests for BoxdRuntimeProvider — all with the boxd SDK mocked."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from bindu.runtime import RuntimeConfig
+from bindu.runtime.base import RuntimeHandle
 from bindu.runtime.boxd_provider import BoxdRuntimeProvider
 
 
@@ -104,8 +107,7 @@ async def test_ship_source_writes_and_extracts(mock_boxd, fake_box, tmp_path):
     exec_calls = fake_box.exec.await_args_list
     assert any(c.args == ("mkdir", "-p", "/app") for c in exec_calls)
     assert any(
-        c.args == ("tar", "xzf", "/tmp/source.tar.gz", "-C", "/app")
-        for c in exec_calls
+        c.args == ("tar", "xzf", "/tmp/source.tar.gz", "-C", "/app") for c in exec_calls
     )
 
 
@@ -135,8 +137,7 @@ async def test_install_deps_with_requirements(mock_boxd, fake_box):
 
     exec_calls = fake_box.exec.await_args_list
     assert any(
-        c.args == ("pip", "install", "-r", "/app/requirements.txt")
-        for c in exec_calls
+        c.args == ("pip", "install", "-r", "/app/requirements.txt") for c in exec_calls
     )
 
 
@@ -166,9 +167,7 @@ async def test_install_deps_raises_on_failure(mock_boxd, fake_box):
     p = BoxdRuntimeProvider()
 
     with pytest.raises(RuntimeError, match="failed"):
-        await p._install_deps(
-            fake_box, has_pyproject=False, has_requirements=False
-        )
+        await p._install_deps(fake_box, has_pyproject=False, has_requirements=False)
 
 
 # ── _start_agent ───────────────────────────────────────────────────
@@ -307,8 +306,7 @@ async def test_deploy_a2_full_flow(
 ):
     """A2 deploy: source ship + install + start + healthy."""
     (tmp_path / "agent.py").write_text(
-        "from bindu.penguin.bindufy import bindufy\n"
-        "bindufy({}, lambda m: 'hi')\n"
+        "from bindu.penguin.bindufy import bindufy\nbindufy({}, lambda m: 'hi')\n"
     )
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\nversion='0.1.0'\n")
     fake_box.exec.return_value = _ok_exec_result()
@@ -332,21 +330,19 @@ async def test_deploy_a2_full_flow(
 
     fake_box.write_file.assert_awaited_once()
     pip_calls = [
-        c for c in fake_box.exec.await_args_list
-        if c.args and c.args[0] == "pip"
+        c for c in fake_box.exec.await_args_list if c.args and c.args[0] == "pip"
     ]
     assert pip_calls, "pip install should have been called"
     serve_calls = [
-        c for c in fake_box.exec.await_args_list
+        c
+        for c in fake_box.exec.await_args_list
         if c.args and c.args[0] == "sh" and "bindu serve" in c.args[2]
     ]
     assert serve_calls, "bindu serve should have been called"
 
 
 @pytest.mark.asyncio
-async def test_deploy_a1_skips_source(
-    mock_boxd, fake_box, fake_health, boxd_api_key
-):
+async def test_deploy_a1_skips_source(mock_boxd, fake_box, fake_health, boxd_api_key):
     """A1 deploy: image-based; no source ship, no pip install."""
     from boxd.errors import NotFoundError
 
@@ -356,9 +352,7 @@ async def test_deploy_a1_skips_source(
     fake_box.url = "https://my-agent.boxd.sh"
 
     p = BoxdRuntimeProvider()
-    cfg = RuntimeConfig.from_dict(
-        {"provider": "boxd", "image": "ghcr.io/me/agent:v1"}
-    )
+    cfg = RuntimeConfig.from_dict({"provider": "boxd", "image": "ghcr.io/me/agent:v1"})
 
     handle = await p.deploy(
         agent_name="my-agent",
@@ -370,8 +364,7 @@ async def test_deploy_a1_skips_source(
     assert handle.url == "https://my-agent.boxd.sh"
     fake_box.write_file.assert_not_awaited()
     pip_calls = [
-        c for c in fake_box.exec.await_args_list
-        if c.args and c.args[0] == "pip"
+        c for c in fake_box.exec.await_args_list if c.args and c.args[0] == "pip"
     ]
     assert not pip_calls
 
@@ -389,9 +382,6 @@ async def test_deploy_requires_credentials(monkeypatch):
 
 
 # ── health / stream_logs / on_exit ────────────────────────────────
-
-
-from bindu.runtime.base import RuntimeHandle
 
 
 @pytest.mark.asyncio
@@ -433,8 +423,6 @@ async def test_health_returns_false_when_unreachable(monkeypatch):
         async def get(self, url):
             raise httpx.ConnectError("boom")
 
-    import httpx
-
     monkeypatch.setattr(
         "bindu.runtime.boxd_provider.httpx.AsyncClient",
         lambda *a, **kw: _FakeClient(),
@@ -446,17 +434,13 @@ async def test_health_returns_false_when_unreachable(monkeypatch):
 @pytest.mark.asyncio
 async def test_on_exit_destroy(mock_boxd, fake_box, boxd_api_key):
     p = BoxdRuntimeProvider()
-    h = RuntimeHandle(
-        "my-agent", "https://my-agent.boxd.sh", "boxd", {"vm_id": "vm-1"}
-    )
+    h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {"vm_id": "vm-1"})
     await p.on_exit(h, "destroy")
     fake_box.destroy.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_on_exit_suspend_does_not_destroy(
-    mock_boxd, fake_box, boxd_api_key
-):
+async def test_on_exit_suspend_does_not_destroy(mock_boxd, fake_box, boxd_api_key):
     """suspend mode relies on boxd's auto_suspend_timeout, not an explicit call."""
     p = BoxdRuntimeProvider()
     h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
@@ -465,9 +449,7 @@ async def test_on_exit_suspend_does_not_destroy(
 
 
 @pytest.mark.asyncio
-async def test_on_exit_detach_is_pure_noop(
-    mock_boxd, fake_box, boxd_api_key
-):
+async def test_on_exit_detach_is_pure_noop(mock_boxd, fake_box, boxd_api_key):
     """detach mode does not even open a connection."""
     p = BoxdRuntimeProvider()
     h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
@@ -478,9 +460,7 @@ async def test_on_exit_detach_is_pure_noop(
 
 
 @pytest.mark.asyncio
-async def test_stream_logs_yields_chunks(
-    mock_boxd, fake_box, boxd_api_key
-):
+async def test_stream_logs_yields_chunks(mock_boxd, fake_box, boxd_api_key):
     """stream_logs(follow=True) passes through box.stream_logs output."""
     chunks = [b"hello\n", b"world\n"]
 

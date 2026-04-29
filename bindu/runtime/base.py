@@ -92,7 +92,6 @@ def get_provider(name: str) -> RuntimeProvider:
     """Instantiate the provider registered under ``name``."""
     if name not in _registry:
         raise UnknownProviderError(
-            f"no runtime provider registered for {name!r}; "
-            f"known: {sorted(_registry)}"
+            f"no runtime provider registered for {name!r}; known: {sorted(_registry)}"
         )
     return _registry[name]()

@@ -1,4 +1,5 @@
 """Source packager tests."""
+
 from __future__ import annotations
 
 import io
@@ -7,7 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from bindu.runtime.source_packager import find_project_root
+from bindu.runtime.source_packager import (
+    IgnoreSpec,
+    SourceTooLargeError,
+    build_tarball,
+    find_project_root,
+    should_include,
+)
 
 
 # ── Project-root discovery ─────────────────────────────────────────
@@ -66,12 +73,7 @@ def test_marker_priority(tmp_path: Path):
 # ── Ignore handling ────────────────────────────────────────────────
 
 
-from bindu.runtime.source_packager import IgnoreSpec, should_include
-
-
-def _make_spec(
-    root: Path, gitignore: str = "", binduignore: str = ""
-) -> IgnoreSpec:
+def _make_spec(root: Path, gitignore: str = "", binduignore: str = "") -> IgnoreSpec:
     if gitignore:
         (root / ".gitignore").write_text(gitignore)
     if binduignore:
@@ -81,9 +83,7 @@ def _make_spec(
 
 def test_default_ignores_pycache(tmp_path: Path):
     spec = _make_spec(tmp_path)
-    assert not should_include(
-        tmp_path / "x" / "__pycache__" / "y.pyc", tmp_path, spec
-    )
+    assert not should_include(tmp_path / "x" / "__pycache__" / "y.pyc", tmp_path, spec)
 
 
 def test_default_ignores_git(tmp_path: Path):
@@ -135,14 +135,10 @@ def test_binduignore_pattern(tmp_path: Path):
 def test_default_ignore_persists_with_binduignore(tmp_path: Path):
     """A .binduignore file does not turn off the built-in defaults."""
     spec = _make_spec(tmp_path, binduignore="other/\n")
-    assert not should_include(
-        tmp_path / "__pycache__" / "x.pyc", tmp_path, spec
-    )
+    assert not should_include(tmp_path / "__pycache__" / "x.pyc", tmp_path, spec)
 
 
 # ── Tarball building ───────────────────────────────────────────────
-
-from bindu.runtime.source_packager import SourceTooLargeError, build_tarball
 
 
 def test_build_tarball_basic(tmp_path: Path):

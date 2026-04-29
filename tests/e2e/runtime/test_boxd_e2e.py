@@ -4,6 +4,7 @@ Skipped unless ``BOXD_E2E=1`` and ``BOXD_API_KEY`` (or ``BOXD_TOKEN``) is set.
 This test creates a real VM, ships a tiny echo agent, hits the A2A endpoint,
 and destroys the VM. Slow (~30–60s), costs real boxd resources.
 """
+
 import os
 from pathlib import Path
 

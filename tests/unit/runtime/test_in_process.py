@@ -1,4 +1,5 @@
 """Tests for InProcessRuntimeProvider — the default no-op runtime."""
+
 import pytest
 
 from bindu.runtime import RuntimeConfig, get_provider

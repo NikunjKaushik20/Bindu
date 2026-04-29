@@ -5,6 +5,7 @@ Subclass ``ProviderContract`` and override ``make_provider()`` and
 ``BoxdRuntimeProvider`` has its own deeper tests in test_boxd_provider.py
 (those use a mocked SDK; the contract here would require a live provider).
 """
+
 from abc import abstractmethod
 
 import pytest

@@ -119,9 +119,7 @@ def main() -> None:
         help="Path to a user agent script that calls bindufy()",
     )
 
-    logs_parser = subparsers.add_parser(
-        "logs", help="Stream agent logs from its VM"
-    )
+    logs_parser = subparsers.add_parser("logs", help="Stream agent logs from its VM")
     logs_parser.add_argument("agent", type=str, help="Agent name")
     logs_parser.add_argument(
         "--no-follow",

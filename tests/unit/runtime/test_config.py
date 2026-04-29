@@ -1,4 +1,5 @@
 """Tests for RuntimeConfig parsing & validation."""
+
 import pytest
 
 from bindu.runtime.config import RuntimeConfig, RuntimeConfigError

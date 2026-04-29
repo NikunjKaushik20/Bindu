@@ -1,4 +1,5 @@
 """Tests for bindufy() runtime dispatch."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -57,9 +58,7 @@ def test_bindufy_with_runtime_dispatches_to_provider(monkeypatch):
 
         async def deploy(*a, **kw):
             called["deploy"] = True
-            return RuntimeHandle(
-                "test-agent", "https://test-agent.boxd.sh", "boxd", {}
-            )
+            return RuntimeHandle("test-agent", "https://test-agent.boxd.sh", "boxd", {})
 
         provider.deploy = deploy
 
