@@ -208,21 +208,37 @@ class BoxdRuntimeProvider(RuntimeProvider):
             )
 
     async def health(self, handle: RuntimeHandle) -> bool:
-        raise NotImplementedError("Task 12")
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{handle.url}/health")
+                return resp.status_code == 200
+        except httpx.HTTPError:
+            return False
 
     async def stream_logs(
         self, handle: RuntimeHandle, follow: bool = True
     ) -> AsyncIterator[bytes]:
-        raise NotImplementedError("Task 12")
-        if False:  # pragma: no cover
-            yield b""
+        async with _make_compute() as compute:
+            box = await compute.box.get(handle.name)
+            async for chunk in box.stream_logs(follow=follow):
+                yield chunk
 
     async def on_exit(
         self,
         handle: RuntimeHandle,
         mode: Literal["suspend", "destroy", "detach"],
     ) -> None:
-        raise NotImplementedError("Task 12")
+        if mode == "detach":
+            return
+        async with _make_compute() as compute:
+            try:
+                box = await compute.box.get(handle.name)
+            except Exception:
+                return
+            if mode == "destroy":
+                await box.destroy()
+            # mode == "suspend": rely on boxd's auto_suspend_timeout (set
+            # at create time). Nothing to do here.
 
 
 register_provider("boxd", BoxdRuntimeProvider)

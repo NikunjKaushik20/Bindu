@@ -386,3 +386,114 @@ async def test_deploy_requires_credentials(monkeypatch):
 
     with pytest.raises(RuntimeError, match="BOXD_API_KEY"):
         await p.deploy("agent", None, cfg, None)
+
+
+# ── health / stream_logs / on_exit ────────────────────────────────
+
+
+from bindu.runtime.base import RuntimeHandle
+
+
+@pytest.mark.asyncio
+async def test_health_returns_true_when_200(monkeypatch):
+    p = BoxdRuntimeProvider()
+
+    class _Resp:
+        status_code = 200
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def get(self, url):
+            return _Resp()
+
+    monkeypatch.setattr(
+        "bindu.runtime.boxd_provider.httpx.AsyncClient",
+        lambda *a, **kw: _FakeClient(),
+    )
+    h = RuntimeHandle("a", "https://a.boxd.sh", "boxd", {})
+    assert await p.health(h) is True
+
+
+@pytest.mark.asyncio
+async def test_health_returns_false_when_unreachable(monkeypatch):
+    p = BoxdRuntimeProvider()
+
+    class _FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def get(self, url):
+            raise httpx.ConnectError("boom")
+
+    import httpx
+
+    monkeypatch.setattr(
+        "bindu.runtime.boxd_provider.httpx.AsyncClient",
+        lambda *a, **kw: _FakeClient(),
+    )
+    h = RuntimeHandle("a", "https://a.boxd.sh", "boxd", {})
+    assert await p.health(h) is False
+
+
+@pytest.mark.asyncio
+async def test_on_exit_destroy(mock_boxd, fake_box, boxd_api_key):
+    p = BoxdRuntimeProvider()
+    h = RuntimeHandle(
+        "my-agent", "https://my-agent.boxd.sh", "boxd", {"vm_id": "vm-1"}
+    )
+    await p.on_exit(h, "destroy")
+    fake_box.destroy.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_on_exit_suspend_does_not_destroy(
+    mock_boxd, fake_box, boxd_api_key
+):
+    """suspend mode relies on boxd's auto_suspend_timeout, not an explicit call."""
+    p = BoxdRuntimeProvider()
+    h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
+    await p.on_exit(h, "suspend")
+    fake_box.destroy.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_exit_detach_is_pure_noop(
+    mock_boxd, fake_box, boxd_api_key
+):
+    """detach mode does not even open a connection."""
+    p = BoxdRuntimeProvider()
+    h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
+    await p.on_exit(h, "detach")
+    fake_box.destroy.assert_not_awaited()
+    fake_box.suspend.assert_not_awaited()
+    mock_boxd.box.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_logs_yields_chunks(
+    mock_boxd, fake_box, boxd_api_key
+):
+    """stream_logs(follow=True) passes through box.stream_logs output."""
+    chunks = [b"hello\n", b"world\n"]
+
+    async def fake_gen(follow=False):
+        for c in chunks:
+            yield c
+
+    fake_box.stream_logs = fake_gen
+    mock_boxd.box.get.return_value = fake_box
+
+    p = BoxdRuntimeProvider()
+    h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
+    out = []
+    async for chunk in p.stream_logs(h, follow=True):
+        out.append(chunk)
+    assert out == chunks
