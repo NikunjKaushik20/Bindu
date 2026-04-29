@@ -14,6 +14,7 @@ directly to the VM's public URL.
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, AsyncIterator, Literal
 
@@ -134,6 +135,26 @@ class BoxdRuntimeProvider(RuntimeProvider):
             f"agent at {url} did not become healthy within {timeout}s"
         )
 
+    @staticmethod
+    def _detect_script_name(source_dir: Path) -> str:
+        """Pick the agent's entry script.
+
+        Prefers a top-level ``.py`` file that calls ``bindufy(``. Falls back
+        to the first ``.py`` file in alphabetical order.
+        """
+        candidates = sorted(source_dir.glob("*.py"))
+        for c in candidates:
+            try:
+                if "bindufy(" in c.read_text(errors="ignore"):
+                    return c.name
+            except OSError:
+                continue
+        if candidates:
+            return candidates[0].name
+        raise RuntimeError(
+            f"no .py file found in {source_dir} to use as agent entry point"
+        )
+
     async def deploy(
         self,
         agent_name: str,
@@ -141,7 +162,50 @@ class BoxdRuntimeProvider(RuntimeProvider):
         config: RuntimeConfig,
         env: dict[str, str] | None = None,
     ) -> RuntimeHandle:
-        raise NotImplementedError("Task 11: full deploy")
+        if not (os.environ.get("BOXD_API_KEY") or os.environ.get("BOXD_TOKEN")):
+            raise RuntimeError(
+                "BOXD_API_KEY or BOXD_TOKEN must be set in the host environment"
+            )
+
+        async with _make_compute() as compute:
+            box = await self._resolve_vm(compute, agent_name, config)
+            public_url = box.url or f"https://{agent_name}.boxd.sh"
+
+            if config.image is None:
+                if source_dir is None:
+                    raise RuntimeError(
+                        "source_dir is required when config.image is not set"
+                    )
+                await self._ship_source(box, source_dir)
+                has_pyproject = (source_dir / "pyproject.toml").exists()
+                has_requirements = (source_dir / "requirements.txt").exists()
+                await self._install_deps(
+                    box,
+                    has_pyproject=has_pyproject,
+                    has_requirements=has_requirements,
+                    bindu_version=config.bindu_version,
+                )
+                script = self._detect_script_name(source_dir)
+                merged_env = {**config.env, **(env or {})}
+                await self._start_agent(
+                    box,
+                    script=script,
+                    env=merged_env,
+                    public_url=public_url,
+                )
+            # else: A1 — image's CMD already starts the agent.
+
+            await self._wait_healthy(public_url, timeout=60.0)
+
+            return RuntimeHandle(
+                name=agent_name,
+                url=public_url,
+                provider="boxd",
+                metadata={
+                    "vm_id": box.id,
+                    "public_ip": box.public_ip,
+                },
+            )
 
     async def health(self, handle: RuntimeHandle) -> bool:
         raise NotImplementedError("Task 12")

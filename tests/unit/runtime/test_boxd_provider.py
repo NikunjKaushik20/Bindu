@@ -281,3 +281,108 @@ async def test_wait_healthy_times_out(monkeypatch):
 
     with pytest.raises(TimeoutError, match="health"):
         await p._wait_healthy("https://my-agent.boxd.sh", timeout=0.1)
+
+
+# ── deploy() integration ───────────────────────────────────────────
+
+
+@pytest.fixture
+def fake_health(monkeypatch):
+    """Skip the actual health-check loop in deploy() tests."""
+
+    async def fake(self, url, timeout=60.0):
+        return None
+
+    monkeypatch.setattr(BoxdRuntimeProvider, "_wait_healthy", fake)
+
+
+@pytest.fixture
+def boxd_api_key(monkeypatch):
+    monkeypatch.setenv("BOXD_API_KEY", "bxk_test")
+
+
+@pytest.mark.asyncio
+async def test_deploy_a2_full_flow(
+    mock_boxd, fake_box, tmp_path, fake_health, boxd_api_key
+):
+    """A2 deploy: source ship + install + start + healthy."""
+    (tmp_path / "agent.py").write_text(
+        "from bindu.penguin.bindufy import bindufy\n"
+        "bindufy({}, lambda m: 'hi')\n"
+    )
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\nversion='0.1.0'\n")
+    fake_box.exec.return_value = _ok_exec_result()
+    fake_box.name = "my-agent"
+    fake_box.url = "https://my-agent.boxd.sh"
+
+    p = BoxdRuntimeProvider()
+    cfg = RuntimeConfig.from_dict({"provider": "boxd"})
+
+    handle = await p.deploy(
+        agent_name="my-agent",
+        source_dir=tmp_path,
+        config=cfg,
+        env={"OPENAI_API_KEY": "sk-test"},
+    )
+
+    assert handle.name == "my-agent"
+    assert handle.url == "https://my-agent.boxd.sh"
+    assert handle.provider == "boxd"
+    assert handle.metadata.get("vm_id") == "vm-1"
+
+    fake_box.write_file.assert_awaited_once()
+    pip_calls = [
+        c for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "pip"
+    ]
+    assert pip_calls, "pip install should have been called"
+    serve_calls = [
+        c for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "sh" and "bindu serve" in c.args[2]
+    ]
+    assert serve_calls, "bindu serve should have been called"
+
+
+@pytest.mark.asyncio
+async def test_deploy_a1_skips_source(
+    mock_boxd, fake_box, fake_health, boxd_api_key
+):
+    """A1 deploy: image-based; no source ship, no pip install."""
+    from boxd.errors import NotFoundError
+
+    mock_boxd.box.get.side_effect = NotFoundError("nope")
+    fake_box.exec.return_value = _ok_exec_result()
+    fake_box.name = "my-agent"
+    fake_box.url = "https://my-agent.boxd.sh"
+
+    p = BoxdRuntimeProvider()
+    cfg = RuntimeConfig.from_dict(
+        {"provider": "boxd", "image": "ghcr.io/me/agent:v1"}
+    )
+
+    handle = await p.deploy(
+        agent_name="my-agent",
+        source_dir=None,
+        config=cfg,
+        env=None,
+    )
+
+    assert handle.url == "https://my-agent.boxd.sh"
+    fake_box.write_file.assert_not_awaited()
+    pip_calls = [
+        c for c in fake_box.exec.await_args_list
+        if c.args and c.args[0] == "pip"
+    ]
+    assert not pip_calls
+
+
+@pytest.mark.asyncio
+async def test_deploy_requires_credentials(monkeypatch):
+    """Missing BOXD_API_KEY/BOXD_TOKEN → raise actionable error."""
+    monkeypatch.delenv("BOXD_API_KEY", raising=False)
+    monkeypatch.delenv("BOXD_TOKEN", raising=False)
+    p = BoxdRuntimeProvider()
+    cfg = RuntimeConfig.from_dict({"provider": "boxd"})
+
+    with pytest.raises(RuntimeError, match="BOXD_API_KEY"):
+        await p.deploy("agent", None, cfg, None)
