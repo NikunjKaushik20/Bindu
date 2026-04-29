@@ -5,12 +5,16 @@ Provides the ``bindu`` command with subcommands:
   - ``bindu serve --grpc``       : start the Bindu core for SDK registration
   - ``bindu serve --script PATH`` : execute a user agent script (the script
     calls ``bindufy()`` itself). Used by ``BoxdRuntimeProvider`` inside the VM.
+  - ``bindu logs <agent>``        : stream logs from the agent's VM
+  - ``bindu shell <agent>``       : open an interactive shell on the agent's VM
 """
 
 import argparse
+import asyncio
 import os
 import signal
 import sys
+from typing import Any
 
 from bindu.utils.logging import get_logger
 
@@ -66,6 +70,29 @@ def _run_user_script(path: str) -> None:
     runpy.run_path(script_path, run_name="__main__")
 
 
+def _make_compute(**kw: Any) -> Any:
+    """Indirection so tests can patch in a fake Compute."""
+    from boxd.aio import Compute
+
+    return Compute(**kw)
+
+
+async def _handle_logs(agent_name: str, follow: bool = True) -> None:
+    """Stream VM logs for the given agent to stdout."""
+    async with _make_compute() as compute:
+        box = await compute.box.get(agent_name)
+        async for chunk in box.stream_logs(follow=follow):
+            sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+            sys.stdout.flush()
+
+
+async def _handle_shell(agent_name: str) -> None:
+    """Open an interactive bash on the agent's VM."""
+    async with _make_compute() as compute:
+        box = await compute.box.get(agent_name)
+        await box.exec("bash", interactive=True)
+
+
 def main() -> None:
     """Run the Bindu CLI."""
     parser = argparse.ArgumentParser(prog="bindu", description="Bindu Framework CLI")
@@ -92,10 +119,29 @@ def main() -> None:
         help="Path to a user agent script that calls bindufy()",
     )
 
+    logs_parser = subparsers.add_parser(
+        "logs", help="Stream agent logs from its VM"
+    )
+    logs_parser.add_argument("agent", type=str, help="Agent name")
+    logs_parser.add_argument(
+        "--no-follow",
+        action="store_true",
+        help="Print available log content and exit (do not follow)",
+    )
+
+    shell_parser = subparsers.add_parser(
+        "shell", help="Open an interactive shell on the agent's VM"
+    )
+    shell_parser.add_argument("agent", type=str, help="Agent name")
+
     args = parser.parse_args()
 
     if args.command == "serve":
         _handle_serve(args)
+    elif args.command == "logs":
+        asyncio.run(_handle_logs(args.agent, follow=not args.no_follow))
+    elif args.command == "shell":
+        asyncio.run(_handle_shell(args.agent))
     else:
         parser.print_help()
         sys.exit(1)
