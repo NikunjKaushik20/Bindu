@@ -9,8 +9,7 @@ start the agent there. After deploy, the host process supervises
 directly to the public URL printed at startup.
 
 Usage:
-    pip install bindu boxd                  # boxd: not on PyPI yet
-    pip install -e ~/boxd/sdk/python        # for now, install editable
+    pip install 'bindu[runtime-boxd]'
     export BOXD_TOKEN=$(boxd login --json | jq -r .token)
     python agent.py
 

@@ -19,11 +19,8 @@ bindufy(
 ## Run
 
 ```bash
-# 1. Install bindu and the boxd SDK
-pip install bindu
-
-# Until the boxd Python SDK is on PyPI, install editably from a local checkout:
-pip install -e ~/boxd/sdk/python
+# 1. Install bindu with the boxd runtime extra
+pip install 'bindu[runtime-boxd]'
 
 # 2. Authenticate
 boxd login           # browser flow; or set BOXD_TOKEN directly

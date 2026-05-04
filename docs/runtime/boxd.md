@@ -8,8 +8,8 @@ the agent serves traffic from its own VM with a public HTTPS URL.
 
 - A boxd account and API key (`BOXD_API_KEY=bxk_...` or `BOXD_TOKEN=...`
   in the host environment).
-- For now, the boxd Python SDK installed locally (until PyPI release):
-  `pip install -e ~/boxd/sdk/python`.
+- The runtime-boxd extra: `pip install 'bindu[runtime-boxd]'` (pulls
+  [`boxd`](https://pypi.org/project/boxd/) from PyPI).
 
 ## Config reference
 
