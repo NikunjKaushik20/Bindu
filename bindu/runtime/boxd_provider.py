@@ -23,6 +23,9 @@ import httpx
 from bindu.runtime.base import RuntimeHandle, RuntimeProvider, register_provider
 from bindu.runtime.config import RuntimeConfig
 from bindu.runtime.source_packager import build_tarball, find_project_root
+from bindu.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Bindu's default HTTP port. The boxd proxy is configured to forward to
 # this port at VM creation time, so the agent's public URL routes correctly.
@@ -141,13 +144,15 @@ async def _safe_write_file(box: Any, blob: bytes, dest: str) -> None:
 class BoxdRuntimeProvider(RuntimeProvider):
     """RuntimeProvider that runs the agent inside a boxd microVM."""
 
-    async def _resolve_vm(self, compute: Any, name: str, config: RuntimeConfig) -> Any:
-        """Get or create the VM for this agent (idempotent by name)."""
+    async def _resolve_vm(
+        self, compute: Any, name: str, config: RuntimeConfig
+    ) -> tuple[Any, bool]:
+        """Get or create the VM (idempotent by name). Returns (box, was_created)."""
         from boxd import BoxConfig, LifecycleConfig, NetworkConfig, ProxyEntry
         from boxd.errors import NotFoundError
 
         try:
-            return await compute.box.get(name)
+            return await compute.box.get(name), False
         except NotFoundError:
             pass
 
@@ -163,7 +168,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
         create_kwargs: dict[str, Any] = {"name": name, "config": box_config}
         if config.image:
             create_kwargs["image"] = config.image
-        return await compute.box.create(**create_kwargs)
+        return await compute.box.create(**create_kwargs), True
 
     async def _wait_vm_ready(
         self, box: Any, timeout: float = _VM_READY_TIMEOUT
@@ -381,7 +386,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
             )
 
         async with _make_compute() as compute:
-            box = await self._resolve_vm(compute, agent_name, config)
+            box, was_created = await self._resolve_vm(compute, agent_name, config)
             # box.url is returned with scheme on CreateVm but bare on GetVm.
             raw_url = box.url or f"{agent_name}.boxd.sh"
             if not raw_url.startswith(("http://", "https://")):
@@ -390,21 +395,23 @@ class BoxdRuntimeProvider(RuntimeProvider):
 
             await self._wait_vm_ready(box, timeout=_VM_READY_TIMEOUT)
 
-            # Refresh proxy port at every deploy: warm runs may have been
-            # created before BINDU_DEFAULT_PORT was wired; idempotent.
-            try:
-                await box.set_proxy_port(port=BINDU_DEFAULT_PORT)
-            except AttributeError:
-                pass
+            if not was_created:
+                # Pre-port-config VMs survive across upgrades; reapply on warm
+                # runs. Skipped on fresh create — NetworkConfig already set it.
+                try:
+                    await box.set_proxy_port(port=BINDU_DEFAULT_PORT)
+                except AttributeError:
+                    pass
 
             if config.image is None:
                 if source_dir is None:
                     raise RuntimeError(
                         "source_dir is required when config.image is not set"
                     )
+                ship_tasks = [self._ship_source(box, source_dir)]
                 if config.bindu_version == "local":
-                    await self._ship_bindu_source(box)
-                await self._ship_source(box, source_dir)
+                    ship_tasks.append(self._ship_bindu_source(box))
+                await asyncio.gather(*ship_tasks)
                 has_pyproject = (source_dir / "pyproject.toml").exists()
                 has_requirements = (source_dir / "requirements.txt").exists()
                 await self._install_deps(
@@ -413,11 +420,6 @@ class BoxdRuntimeProvider(RuntimeProvider):
                     has_requirements=has_requirements,
                     bindu_version=config.bindu_version,
                 )
-                # Trust the explicit script path from the caller (the deploy
-                # CLI threads through what the user actually invoked). Fall
-                # back to root-glob detection for callers that don't pass
-                # one — that includes the e2e tests and any future ad-hoc
-                # use of BoxdRuntimeProvider directly.
                 script_to_run = script or self._detect_script_name(source_dir)
                 merged_env = {**config.env, **(env or {})}
                 await self._start_agent(
@@ -490,17 +492,19 @@ class BoxdRuntimeProvider(RuntimeProvider):
         async with _make_compute() as compute:
             try:
                 box = await compute.box.get(handle.name)
-            except Exception:
+            except Exception as e:
+                logger.warning("on_exit could not look up VM %s: %s", handle.name, e)
                 return
             if mode == "destroy":
                 await box.destroy()
             elif mode == "suspend":
                 try:
                     await box.suspend()
-                except Exception:
-                    # Don't blow up the host on shutdown — log and move on.
+                except Exception as e:
                     # The agent's still up; user can retry or destroy manually.
-                    pass
+                    logger.warning(
+                        "on_exit suspend failed for %s: %s", handle.name, e
+                    )
 
 
 register_provider("boxd", BoxdRuntimeProvider)

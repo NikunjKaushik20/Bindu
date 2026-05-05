@@ -42,9 +42,8 @@ class InProcessRuntimeProvider(RuntimeProvider):
         self, handle: RuntimeHandle, follow: bool = True
     ) -> AsyncIterator[bytes]:
         """Yield no log chunks — the host process logs to stdout natively."""
-        if False:  # pragma: no cover
-            yield b""
-        return
+        for _ in ():
+            yield _
 
     async def on_exit(
         self,

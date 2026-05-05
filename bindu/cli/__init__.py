@@ -70,42 +70,33 @@ def _run_user_script(path: str) -> None:
     import runpy
 
     script_path = os.path.abspath(path)
-    sys.path.insert(0, os.path.dirname(script_path))
-    runpy.run_path(script_path, run_name="__main__")
-
-
-def _make_compute(**kw: Any) -> Any:
-    """Indirection so tests can patch in a fake Compute."""
-    from boxd.aio import Compute
-
-    return Compute(**kw)
+    script_dir = os.path.dirname(script_path)
+    sys.path.insert(0, script_dir)
+    try:
+        runpy.run_path(script_path, run_name="__main__")
+    finally:
+        try:
+            sys.path.remove(script_dir)
+        except ValueError:
+            pass
 
 
 async def _handle_logs(agent_name: str, follow: bool = True) -> None:
-    """Stream the in-VM agent's stdout/stderr to the host terminal.
+    """Stream the in-VM agent's stdout/stderr to the host terminal."""
+    from bindu.runtime import get_provider
+    from bindu.runtime.base import RuntimeHandle
 
-    Uses ``tail -F`` over a streaming exec because boxd 0.1.x's server-side
-    ``StreamLogs`` RPC is not yet implemented. The agent's stdout/stderr
-    is captured to a known path by the runtime provider when it starts the
-    process; we just tail that file.
-    """
-    from bindu.runtime.boxd_provider import AGENT_LOG_PATH
-
-    async with _make_compute() as compute:
-        box = await compute.box.get(agent_name)
-        args = (
-            ("tail", "-n", "+1", "-F", AGENT_LOG_PATH)
-            if follow
-            else ("sh", "-c", f"cat {AGENT_LOG_PATH} 2>/dev/null || true")
-        )
-        proc = await box.exec(*args, stream=True)
-        async for chunk in proc.stdout:
-            sys.stdout.write(chunk.decode("utf-8", errors="replace"))
-            sys.stdout.flush()
+    provider = get_provider("boxd")
+    handle = RuntimeHandle(name=agent_name, url="", provider="boxd")
+    async for chunk in provider.stream_logs(handle, follow=follow):
+        sys.stdout.write(chunk.decode("utf-8", errors="replace"))
+        sys.stdout.flush()
 
 
 async def _handle_shell(agent_name: str) -> None:
     """Open an interactive bash on the agent's VM."""
+    from bindu.runtime.boxd_provider import _make_compute
+
     async with _make_compute() as compute:
         box = await compute.box.get(agent_name)
         await box.exec("bash", interactive=True)
@@ -271,9 +262,6 @@ def _handle_deploy(args: argparse.Namespace) -> None:
     caller_dir = Path(captured["caller_dir"])
     source_dir = find_project_root(caller_dir)
 
-    # Compute the script path relative to source_dir so the VM gets the same
-    # entry point the user typed — without re-detecting at provider level
-    # (which would silently pick a different bindufy() call in the same repo).
     try:
         script_rel = str(Path(script_path).resolve().relative_to(source_dir)).replace(
             "\\", "/"

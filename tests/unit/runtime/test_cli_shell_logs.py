@@ -40,7 +40,9 @@ async def test_logs_streams_to_stdout(capsys):
     fake_compute.__aenter__ = AsyncMock(return_value=fake_compute)
     fake_compute.__aexit__ = AsyncMock()
 
-    with patch("bindu.cli._make_compute", return_value=fake_compute):
+    with patch(
+        "bindu.runtime.boxd_provider._make_compute", return_value=fake_compute
+    ):
         await _handle_logs("my-agent", follow=True)
 
     out = capsys.readouterr().out
@@ -64,7 +66,9 @@ async def test_shell_calls_exec_bash():
     fake_compute.__aenter__ = AsyncMock(return_value=fake_compute)
     fake_compute.__aexit__ = AsyncMock()
 
-    with patch("bindu.cli._make_compute", return_value=fake_compute):
+    with patch(
+        "bindu.runtime.boxd_provider._make_compute", return_value=fake_compute
+    ):
         await _handle_shell("my-agent")
 
     fake_box.exec.assert_awaited_once()

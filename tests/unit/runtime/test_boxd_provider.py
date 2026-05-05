@@ -67,11 +67,12 @@ async def test_resolve_vm_creates_when_not_found(mock_boxd, fake_box):
     p = BoxdRuntimeProvider()
 
     cfg = RuntimeConfig.from_dict({"provider": "boxd"})
-    box = await p._resolve_vm(mock_boxd, "my-agent", cfg)
+    box, was_created = await p._resolve_vm(mock_boxd, "my-agent", cfg)
 
     mock_boxd.box.get.assert_awaited_once_with("my-agent")
     mock_boxd.box.create.assert_awaited_once()
     assert box is fake_box
+    assert was_created is True
 
 
 @pytest.mark.asyncio
@@ -79,11 +80,12 @@ async def test_resolve_vm_reuses_when_found(mock_boxd, fake_box):
     """If a VM already exists, reuse it without creating."""
     p = BoxdRuntimeProvider()
     cfg = RuntimeConfig.from_dict({"provider": "boxd"})
-    box = await p._resolve_vm(mock_boxd, "my-agent", cfg)
+    box, was_created = await p._resolve_vm(mock_boxd, "my-agent", cfg)
 
     mock_boxd.box.get.assert_awaited_once_with("my-agent")
     mock_boxd.box.create.assert_not_awaited()
     assert box is fake_box
+    assert was_created is False
 
 
 @pytest.mark.asyncio
