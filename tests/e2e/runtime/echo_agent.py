@@ -7,6 +7,7 @@ from bindu.penguin.bindufy import bindufy
 
 
 def handler(messages):
+    """Echo the last user message back, or a placeholder when input is empty."""
     if not messages:
         return "no message"
     return [

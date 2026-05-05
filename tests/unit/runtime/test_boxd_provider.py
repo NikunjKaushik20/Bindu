@@ -519,7 +519,7 @@ async def test_deploy_a2_full_flow(
         agent_name="my-agent",
         source_dir=tmp_path,
         config=cfg,
-        env={"OPENAI_API_KEY": "sk-test"},
+        env={"OPENAI_API_KEY": "sk-test"},  # pragma: allowlist secret
     )
 
     assert handle.name == "my-agent"

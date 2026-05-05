@@ -60,13 +60,13 @@ class _FakeCompute:
 
 @pytest.fixture
 def fake_box():
-    """A fresh _FakeBox per test."""
+    """Return a fresh _FakeBox per test."""
     return _FakeBox()
 
 
 @pytest.fixture
 def fake_compute(fake_box):
-    """A fresh _FakeCompute per test, wired so .box.create returns fake_box."""
+    """Return a fresh _FakeCompute per test, wired so .box.create returns fake_box."""
     c = _FakeCompute()
     c.box.create.return_value = fake_box
     c.box.get.return_value = fake_box

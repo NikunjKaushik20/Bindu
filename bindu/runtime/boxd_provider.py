@@ -502,9 +502,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
                     await box.suspend()
                 except Exception as e:
                     # The agent's still up; user can retry or destroy manually.
-                    logger.warning(
-                        "on_exit suspend failed for %s: %s", handle.name, e
-                    )
+                    logger.warning("on_exit suspend failed for %s: %s", handle.name, e)
 
 
 register_provider("boxd", BoxdRuntimeProvider)

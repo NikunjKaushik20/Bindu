@@ -168,7 +168,10 @@ def test_deploy_env_flag_repeated(monkeypatch, tmp_path):
             "DEBUG=1",
         ],
     )
-    assert deploy_kwargs["config"].env == {"OPENAI_API_KEY": "sk-x", "DEBUG": "1"}
+    assert deploy_kwargs["config"].env == {
+        "OPENAI_API_KEY": "sk-x",  # pragma: allowlist secret
+        "DEBUG": "1",
+    }
 
 
 def test_deploy_env_malformed_exits(monkeypatch, tmp_path):
@@ -304,7 +307,9 @@ def test_dry_run_warns_about_sensitive_files(monkeypatch, tmp_path, capsys):
     """A dropped .env / *.pem is reported with relative path + injection hint."""
     script = _make_agent_script(tmp_path, name="leaky")
     (tmp_path / ".env").write_text("OPENAI_API_KEY=sk-leak\n")
-    (tmp_path / "server.pem").write_text("-----BEGIN PRIVATE KEY-----\n")
+    (tmp_path / "server.pem").write_text(  # pragma: allowlist secret
+        "-----BEGIN PRIVATE KEY-----\n"  # pragma: allowlist secret
+    )
 
     from bindu import cli as cli_mod
 

@@ -147,7 +147,9 @@ def test_find_sensitive_files(tmp_path: Path):
     from bindu.runtime.source_packager import find_sensitive_files
 
     (tmp_path / ".env").write_text("OPENAI_API_KEY=sk-xxx\n")
-    (tmp_path / "server.pem").write_text("-----BEGIN PRIVATE KEY-----\n")
+    (tmp_path / "server.pem").write_text(  # pragma: allowlist secret
+        "-----BEGIN PRIVATE KEY-----\n"  # pragma: allowlist secret
+    )
     (tmp_path / ".aws").mkdir()
     (tmp_path / ".aws" / "credentials").write_text("[default]\n")
     (tmp_path / "agent.py").write_text("# fine\n")
