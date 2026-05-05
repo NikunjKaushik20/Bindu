@@ -683,12 +683,30 @@ async def test_on_exit_destroy(mock_boxd, fake_box, boxd_api_key):
 
 
 @pytest.mark.asyncio
-async def test_on_exit_suspend_does_not_destroy(mock_boxd, fake_box, boxd_api_key):
-    """suspend mode relies on boxd's auto_suspend_timeout, not an explicit call."""
+async def test_on_exit_suspend_actively_suspends(mock_boxd, fake_box, boxd_api_key):
+    """suspend mode calls box.suspend() — not a no-op.
+
+    The auto-suspend timer is disabled by default (so background tasks
+    aren't frozen mid-flight while the agent is running), so relying on the
+    timer would silently turn ``--on-exit=suspend`` into ``--on-exit=detach``.
+    """
     p = BoxdRuntimeProvider()
     h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
     await p.on_exit(h, "suspend")
+    fake_box.suspend.assert_awaited_once()
     fake_box.destroy.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_exit_suspend_swallows_errors(mock_boxd, fake_box, boxd_api_key):
+    """If box.suspend() raises, on_exit returns cleanly — host shutdown
+    shouldn't bubble VM-side errors to the user's terminal."""
+    fake_box.suspend.side_effect = RuntimeError("boxd had a moment")
+    p = BoxdRuntimeProvider()
+    h = RuntimeHandle("my-agent", "https://my-agent.boxd.sh", "boxd", {})
+    # Must not raise.
+    await p.on_exit(h, "suspend")
+    fake_box.suspend.assert_awaited_once()
 
 
 @pytest.mark.asyncio

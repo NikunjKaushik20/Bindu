@@ -21,8 +21,8 @@ the agent serves traffic from its own VM with a public HTTPS URL.
 | `--vcpu` | int | `2` | vCPUs for the VM. |
 | `--memory` | str | `4G` | RAM. Accepts boxd size strings (`512M`, `4G`, ...). |
 | `--disk` | str | `20G` | Disk size. |
-| `--auto-suspend` | int | `60` | Seconds of inactivity before boxd auto-suspends the VM. Used for `--on-exit=suspend`. |
-| `--on-exit` | str | `suspend` | Behavior on Ctrl-C: `suspend` (detach + auto-suspend), `destroy` (tear down VM), `detach` (leave running). |
+| `--auto-suspend` | int | `0` (disabled) | Seconds of *idle* (no HTTP request) before boxd auto-suspends the VM. **Default off** because bindu agents commonly run background work (scheduler ticks, streaming LLM calls, websockets) that would be frozen mid-flight by an idle timeout. Pass an explicit value like `--auto-suspend=60` only if your agent is pure request/response. |
+| `--on-exit` | str | `suspend` | Behavior on Ctrl-C: `suspend` (actively call `box.suspend()`), `destroy` (tear down VM), `detach` (leave running). `suspend` works regardless of `--auto-suspend` — it suspends the VM directly when the host detaches. |
 | `--bindu-version` | str | unset | Pin the bindu version installed in the VM. Special value `local` ships the host's bindu source instead of pulling from PyPI (useful for testing patched bindu). |
 | `--env` | KEY=VALUE | — | Extra env var for the agent inside the VM (repeatable). |
 
@@ -36,9 +36,17 @@ the agent serves traffic from its own VM with a public HTTPS URL.
    Cold path: ~10–30 seconds depending on dep weight.
 2. **Subsequent runs (same agent name):** the CLI reuses the existing VM,
    updates source, restarts the agent. ~1–3 seconds.
-3. **Ctrl-C with `--on-exit=suspend` (default):** the CLI detaches; VM
-   auto-suspends after `--auto-suspend` seconds of no traffic. Re-run to
-   resume.
+3. **Ctrl-C with `--on-exit=suspend` (default):** the CLI explicitly calls
+   `box.suspend()`, freezing the VM's memory and pausing all in-flight
+   work. The VM is preserved on disk; re-running `bindu deploy` resumes
+   in 1–3s with state intact (DID keys, vector store, conversation
+   history, etc. all survive).
+4. **`--auto-suspend=N` (off by default):** while the agent is *running*,
+   suspend the VM after N seconds without an HTTP request. Useful for
+   pure request/response agents to save cost during idle periods. Avoid
+   if the agent has scheduled tasks, streaming LLM calls, or websocket
+   connections — those will be frozen mid-execution and resume mid-RPC,
+   which most upstreams don't tolerate.
 
 ## Identity and secrets
 

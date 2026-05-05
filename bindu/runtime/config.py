@@ -35,7 +35,13 @@ class RuntimeConfig:
     vcpu: int = 2
     memory: str = "4G"
     disk: str = "20G"
-    auto_suspend: int = 60
+    # ``0`` is boxd's "disabled" sentinel for auto-suspend. Default to off
+    # because bindu agents commonly run background tasks (scheduler ticks,
+    # streaming LLM calls, websocket sessions) that would be frozen mid-flight
+    # by an idle-timeout suspend. Cost-conscious users opt back in with
+    # ``--auto-suspend=60``; on_exit='suspend' still saves cost between
+    # sessions even with auto_suspend=0.
+    auto_suspend: int = 0
     on_exit: Literal["suspend", "destroy", "detach"] = "suspend"
     bindu_version: str | None = None
     env: dict[str, str] = field(default_factory=dict)
@@ -80,7 +86,7 @@ class RuntimeConfig:
             vcpu=vcpu,
             memory=raw.get("memory", "4G"),
             disk=raw.get("disk", "20G"),
-            auto_suspend=int(raw.get("auto_suspend", 60)),
+            auto_suspend=int(raw.get("auto_suspend", 0)),
             on_exit=on_exit,
             bindu_version=raw.get("bindu_version"),
             env=dict(raw.get("env", {})),

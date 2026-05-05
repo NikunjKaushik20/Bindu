@@ -22,7 +22,9 @@ def test_boxd_minimal():
     assert cfg.vcpu == 2
     assert cfg.memory == "4G"
     assert cfg.disk == "20G"
-    assert cfg.auto_suspend == 60
+    # auto_suspend defaults OFF (0 is boxd's "disabled" sentinel) so the VM
+    # never freezes mid-task. on_exit=suspend still saves cost between sessions.
+    assert cfg.auto_suspend == 0
     assert cfg.on_exit == "suspend"
     assert cfg.env == {}
 

@@ -16,15 +16,16 @@ Deploy to a boxd VM::
 
     pip install 'bindu[runtime-boxd]'
     export BOXD_TOKEN=$(boxd login --json | jq -r .token)
-    bindu deploy agent.py --runtime=boxd --auto-suspend=60 --on-exit=suspend
+    bindu deploy agent.py --runtime=boxd --on-exit=suspend
 
 After ``✓ runtime-boxd-example serving at https://...``, hit it::
 
     curl https://runtime-boxd-example.boxd.sh/health
     curl https://runtime-boxd-example.boxd.sh/.well-known/agent.json
 
-Ctrl-C detaches; the VM auto-suspends after 60s of inactivity. Re-running
-``bindu deploy`` resumes in ~1s.
+Ctrl-C explicitly suspends the VM (preserves memory + disk state); re-running
+``bindu deploy`` resumes in ~1s with DID keys, vector store, conversation
+history all intact.
 
 See ``docs/runtime/`` for the full runtime-provider documentation.
 """

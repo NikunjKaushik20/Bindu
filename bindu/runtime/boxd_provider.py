@@ -478,7 +478,13 @@ class BoxdRuntimeProvider(RuntimeProvider):
         handle: RuntimeHandle,
         mode: Literal["suspend", "destroy", "detach"],
     ) -> None:
-        """Apply the on-exit policy (``suspend`` / ``destroy`` / ``detach``)."""
+        """Apply the on-exit policy (``suspend`` / ``destroy`` / ``detach``).
+
+        ``suspend`` actively calls ``box.suspend()`` rather than waiting for
+        the auto-suspend timer. The timer is disabled by default (so background
+        tasks aren't frozen mid-flight while the agent is running), so relying
+        on it would silently turn ``--on-exit=suspend`` into a no-op.
+        """
         if mode == "detach":
             return
         async with _make_compute() as compute:
@@ -488,7 +494,13 @@ class BoxdRuntimeProvider(RuntimeProvider):
                 return
             if mode == "destroy":
                 await box.destroy()
-            # mode == "suspend": rely on auto_suspend_timeout (set at create).
+            elif mode == "suspend":
+                try:
+                    await box.suspend()
+                except Exception:
+                    # Don't blow up the host on shutdown — log and move on.
+                    # The agent's still up; user can retry or destroy manually.
+                    pass
 
 
 register_provider("boxd", BoxdRuntimeProvider)

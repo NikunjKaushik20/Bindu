@@ -23,11 +23,13 @@ boxd login           # browser flow; or set BOXD_TOKEN directly
 export BOXD_TOKEN=$(jq -r .token ~/.config/boxd/credentials.json)
 
 # 3. Deploy
-bindu deploy agent.py \
-    --runtime=boxd \
-    --auto-suspend=60 \
-    --on-exit=suspend
+bindu deploy agent.py --runtime=boxd
 ```
+
+(`--on-exit=suspend` is the default; `--auto-suspend` is off by default
+because bindu agents commonly run background work that shouldn't be frozen
+mid-task. Add `--auto-suspend=60` for cost savings on pure request/response
+agents.)
 
 You should see:
 
@@ -45,8 +47,9 @@ curl https://runtime-boxd-example.boxd.sh/health
 curl https://runtime-boxd-example.boxd.sh/.well-known/agent.json
 ```
 
-Ctrl-C the deploy terminal — boxd auto-suspends the VM after 60s of inactivity.
-Re-run `bindu deploy` to resume (~1 second warm).
+Ctrl-C the deploy terminal — bindu actively suspends the VM (preserving
+memory + disk state). Re-run `bindu deploy` to resume (~1 second warm),
+with DID keys, vector store, and conversation history all intact.
 
 ## What just happened
 
