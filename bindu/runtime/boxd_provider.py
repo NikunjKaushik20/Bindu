@@ -144,15 +144,13 @@ async def _safe_write_file(box: Any, blob: bytes, dest: str) -> None:
 class BoxdRuntimeProvider(RuntimeProvider):
     """RuntimeProvider that runs the agent inside a boxd microVM."""
 
-    async def _resolve_vm(
-        self, compute: Any, name: str, config: RuntimeConfig
-    ) -> tuple[Any, bool]:
-        """Get or create the VM (idempotent by name). Returns (box, was_created)."""
+    async def _resolve_vm(self, compute: Any, name: str, config: RuntimeConfig) -> Any:
+        """Get or create the VM for this agent (idempotent by name)."""
         from boxd import BoxConfig, LifecycleConfig, NetworkConfig, ProxyEntry
         from boxd.errors import NotFoundError
 
         try:
-            return await compute.box.get(name), False
+            return await compute.box.get(name)
         except NotFoundError:
             pass
 
@@ -168,7 +166,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
         create_kwargs: dict[str, Any] = {"name": name, "config": box_config}
         if config.image:
             create_kwargs["image"] = config.image
-        return await compute.box.create(**create_kwargs), True
+        return await compute.box.create(**create_kwargs)
 
     async def _wait_vm_ready(
         self, box: Any, timeout: float = _VM_READY_TIMEOUT
@@ -386,7 +384,7 @@ class BoxdRuntimeProvider(RuntimeProvider):
             )
 
         async with _make_compute() as compute:
-            box, was_created = await self._resolve_vm(compute, agent_name, config)
+            box = await self._resolve_vm(compute, agent_name, config)
             # box.url is returned with scheme on CreateVm but bare on GetVm.
             raw_url = box.url or f"{agent_name}.boxd.sh"
             if not raw_url.startswith(("http://", "https://")):
@@ -395,13 +393,13 @@ class BoxdRuntimeProvider(RuntimeProvider):
 
             await self._wait_vm_ready(box, timeout=_VM_READY_TIMEOUT)
 
-            if not was_created:
-                # Pre-port-config VMs survive across upgrades; reapply on warm
-                # runs. Skipped on fresh create — NetworkConfig already set it.
-                try:
-                    await box.set_proxy_port(port=BINDU_DEFAULT_PORT)
-                except AttributeError:
-                    pass
+            # Reapply on every deploy: boxd 0.1.1 doesn't always honor
+            # NetworkConfig.proxies on create, and warm reuse keeps the
+            # original config. Idempotent.
+            try:
+                await box.set_proxy_port(port=BINDU_DEFAULT_PORT)
+            except AttributeError:
+                pass
 
             if config.image is None:
                 if source_dir is None:
