@@ -615,7 +615,7 @@ def bindufy(
     run_server: bool = True,
     key_dir: str | Path | None = None,
     launch: bool = False,
-) -> AgentManifest:
+) -> AgentManifest | None:
     """Transform an agent handler into a Bindu microservice.
 
     This is the main entry point for Python agents. It validates the handler,
@@ -686,6 +686,22 @@ def bindufy(
 
     caller_file = inspect.getframeinfo(frame.f_back).filename
     caller_dir = Path(os.path.abspath(caller_file)).parent
+
+    # Capture sentinel: when set by ``bindu deploy``, dump the agent name and
+    # source directory to JSON so the deploy CLI can package + ship the agent
+    # without re-implementing config in flag-land. Returning here skips all
+    # heavy runtime setup (DID, server, etc.) on the host. Inside the deployed
+    # VM the env var is unset, so ``bindufy()`` runs normally.
+    if capture_path := os.environ.get("BINDU_DEPLOY_CAPTURE"):
+        import json
+
+        agent_name = config.get("name") or config.get("id")
+        if not agent_name:
+            raise ValueError("config must include 'name' for runtime deployment")
+        Path(capture_path).write_text(
+            json.dumps({"agent_name": agent_name, "caller_dir": str(caller_dir)})
+        )
+        return None
 
     return _bindufy_core(
         config=config,

@@ -92,6 +92,14 @@ grpc = [
     "protobuf>=4.25.0",
 ]
 
+# Boxd runtime provider — agents-in-microVM (use: pip install bindu[runtime-boxd])
+runtime-boxd = [
+    "boxd>=0.1.1",
+    # boxd's generated gRPC stubs require grpcio>=1.80.0; bindu's main pin is
+    # lower, so uv would otherwise pick a too-old grpcio for the boxd wheel.
+    "grpcio>=1.80.0",
+]
+
 # Minimal core only (use: pip install bindu[core] --only-deps)
 core = [
     "uvicorn>=0.35",
