@@ -1,0 +1,336 @@
+Release: Security Hotfix & Boxd Runtime Provider
+Version: 2026.20.2
+Date: May 12, 2026
+
+OVERVIEW
+--------
+This release combines a high-severity security hotfix with bindu's first
+RuntimeProvider integration. The security fix closes a fail-open path in the
+hybrid OAuth2 + DID middleware that effectively reduced two-factor request
+authentication to OAuth-only for any caller willing to omit the signature
+header. The feature side introduces `bindu deploy`, which takes any working
+bindu script and ships it to a public HTTPS-served microVM with a single
+command — no rewrite of deploy logic per script. The release also rolls up
+substantial gateway work (recipes, DID provenance in SSE, AgentCard fetching),
+a fix for stale Hydra token cache after revocation, expanded examples, and
+broad documentation refreshes including a new beginner-friendly quickstart for
+the boxd runtime.
+
+PROBLEM SOLVED
+--------------
+Before this release:
+- Hybrid OAuth2 + DID authentication on v2026.12.5 silently failed open when
+  a `did:*` OAuth client made a request without an `X-DID-Signature` header,
+  or when the client's Hydra `metadata.public_key` was missing. In both cases
+  the middleware returned `is_valid=True` despite verifying nothing. An
+  attacker holding a stolen bearer token could impersonate a DID agent for
+  the full token TTL by simply omitting the signature header — collapsing
+  the "hybrid" two-layer model to OAuth-only.
+- Hydra's token introspection cache held tokens for 5 minutes regardless of
+  upstream revocation, creating a window where a freshly revoked token still
+  passed validation.
+- Shipping a bindu agent to a stable public URL required hand-rolling
+  deploy logic — Dockerfile, hosting account, reverse proxy, TLS, port
+  forwarding — for every agent script.
+- Gateway lacked progressive-disclosure recipes and surfaced limited DID
+  provenance to clients consuming the SSE stream.
+
+After this release:
+- The DID-signature gate fails closed in both branches: a `did:*` caller
+  without a signature header is rejected (`missing_signature_headers`), and
+  a configured DID client whose Hydra public key is unavailable is rejected
+  (`public_key_unavailable`). Operator-facing warning logs explain how to
+  remediate. Seven new unit tests pin the behavior.
+- Hydra token cache now invalidates promptly on revocation; the failing path
+  is fully covered by new tests at
+  `tests/unit/server/middleware/test_hydra_token_cache.py`.
+- `bindu deploy my_agent.py --runtime=boxd` provisions a microVM, ships the
+  project source, installs deps, starts the agent, and prints a public
+  HTTPS URL — cold deploy ~60s, warm redeploy ~15s, suspend on Ctrl-C.
+- Gateway exposes recipes as a progressive-disclosure pattern, fetches the
+  agent card on first contact, and emits DID verification counts and observed
+  DIDs in SSE events.
+
+FEATURES
+--------
+
+1. Hybrid OAuth2 + DID Middleware: Fail Closed
+   - Both fail-open branches in `_verify_did_signature_asgi` now reject
+     unverifiable requests. Reason codes are refined:
+     `missing_signature_headers` (caller omitted `X-DID-Signature`) and
+     `public_key_unavailable` (no public key in Hydra metadata).
+   - Operator warning logs explain remediation steps inline.
+   - No new config knob — the previous behavior was a bug, not a mode. A
+     `did:*` client that cannot sign must either start signing or stop
+     using a `did:*` `client_id`.
+   - Bug walkthrough preserved at
+     `bugs/core/2026-04-18-did-signature-fail-open.md`.
+
+2. Boxd Runtime Provider & `bindu deploy` CLI
+   - New `RuntimeProvider` abstraction (`bindu/runtime/`) with an
+     in-process default and a `BoxdRuntimeProvider` reference implementation.
+   - New CLI: `bindu deploy <script> --runtime=boxd [--vcpu --memory
+     --auto-suspend --on-exit suspend|destroy|detach --bindu-version
+     VERSION|local --env KEY=VALUE --image IMG --dry-run]`.
+   - New CLI: `bindu logs <agent>` streams the in-VM agent log via `tail -F`
+     over a streaming exec.
+   - New CLI: `bindu shell <agent>` opens an interactive bash on the VM.
+   - New CLI: `bindu serve --script <path>` for in-VM execution.
+   - Sensitive-file denylist on the source packager: `.env*`, `*.pem`,
+     `*.key`, `id_rsa*`, `credentials*`, `*.kdbx`, `*.p12`, `*.pfx`,
+     `*.kubeconfig` and `.aws/` `.ssh/` `.gnupg/` `.bindu/` directories
+     are never tarballed. Secrets flow exclusively via `--env KEY=VALUE`.
+   - New optional extra: `pip install 'bindu[runtime-boxd]'`.
+   - 96 unit tests + a gated real-VM e2e at `tests/e2e/runtime/`.
+
+3. Hydra Token Cache: Revocation-Aware
+   - Token introspection cache no longer outlives revocation events from
+     the upstream Hydra instance.
+   - Bug walkthrough at
+     `bugs/core/2026-04-26-hydra-token-cache-revocation-lag.md`.
+
+4. Gateway: Recipes, DID Provenance, AgentCard Fetching
+   - Progressive-disclosure recipes — markdown playbooks in
+     `gateway/recipes/` that the planner lazy-loads on demand. Metadata
+     (name + description) is in the system prompt; full body loads only
+     when `load_recipe` is called.
+   - Initial recipe set seeded: multi-agent research, payment-required flow.
+   - Planner fetches the agent card on first contact and activates the DID
+     fallback verifier from the card's published key.
+   - SSE stream now surfaces observed DIDs with provenance and DID-signature
+     verification counts.
+   - Detailed `/health` payload aligned with Bindu agent shape.
+   - Hardened against colliding A2A tool ids and recipe names that would
+     conflict with `call_` prefixes.
+   - Session lock test coverage expanded (`gateway/tests/planner/`).
+
+5. New & Refreshed Examples
+   - Hermes agent example added (`examples/hermes_agent/`).
+   - Runtime-boxd example added (`examples/runtime-boxd-agent/`) with a
+     10-line echo agent that runs locally with `python agent.py` and
+     deploys with `bindu deploy agent.py --runtime=boxd`.
+   - Beginner examples cleanup and notte-browser-agent doc refresh.
+
+6. Documentation
+   - New beginner-friendly quickstart at `docs/runtime/quickstart.md`
+     walks a first-time user through deploying their first bindu agent
+     to a public HTTPS URL — no jargon, real terminal output, common
+     gotchas called out inline.
+   - New runtime overview at `docs/runtime/README.md` plus full flag
+     reference at `docs/runtime/boxd.md` and custom-image (A1) mode
+     guide at `docs/runtime/custom-image.md`.
+   - Main README gains a deploy-to-cloud section pointing at the new
+     quickstart.
+   - OpenAPI spec added under `docs/`.
+   - Gateway docs refreshed; agents.md/skills published for contributor
+     onboarding.
+
+7. Dev Hygiene & Security Posture
+   - Bumped vulnerable transitive deps (PR #500).
+   - Dep-pin hygiene refresh (PR #494) to keep floors and ceilings honest.
+   - Workflow hardening on the release pipeline (PR #505).
+   - Pre-commit pass now green across `ty` after pulling the
+     `runtime-boxd` extra into the dev group and silencing the
+     `await_args` AsyncMock-typing diagnostics in runtime tests.
+   - Stale `# type: ignore` directives removed from runtime test fixtures.
+
+TECHNICAL DETAILS
+-----------------
+
+DID Signature Verification Path:
+- `_verify_did_signature_asgi(receive, client_did, headers)` is now invoked
+  only for callers whose OAuth `client_id` starts with `did:`. Once that
+  contract holds, the signed-envelope is mandatory.
+- Both previously-fail-open branches return `(False, {...}, receive)` with
+  refined reason codes and warning logs.
+- The outer `__call__` gate at `bindu/server/middleware/auth/hydra.py:299`
+  is unchanged — it consults the bool only, so the fix lands in one
+  function and one file.
+
+Boxd Runtime Lifecycle:
+1. First run: deploy CLI runs the user's script once with a capture sentinel
+   so `bindufy()` returns the agent name without serving. The CLI then
+   packages the project, ships the tarball, runs `pip install bindu` + the
+   project's deps in the VM, exec's `bindu serve --script <script>`, and
+   polls `/health` until ready. Cold path: ~10–30s (or up to ~60s with
+   heavier deps).
+2. Subsequent runs (same agent name): warm path reuses the VM, updates
+   source, restarts the agent. ~1–3s.
+3. `--on-exit=suspend` (default): explicit `box.suspend()` on Ctrl-C
+   freezes memory and disk. Re-running `bindu deploy` resumes in 1–3s
+   with all state intact.
+4. `--auto-suspend=N` (off by default): suspends the VM after N seconds
+   without an HTTP request. Off by default because bindu agents
+   commonly run background work that an idle timeout would freeze mid-flight.
+
+Source Packager Safety:
+- `path.relative_to(root)` blocks `/` or `..` escapes.
+- `os.walk(followlinks=False)` + symlink-as-link tar entries prevents
+  symlink-to-host-secret exfil.
+- 50 MB compressed tarball cap; sha256 verification + 3-attempt retry
+  on every upload to mitigate boxd 0.1.x `write_file` truncation.
+- `--dry-run` lists tarball contents, sensitive-file drops, and env
+  keys (values hidden) without touching the cloud.
+
+CONFIGURATION
+-------------
+
+New environment variable (optional):
+```bash
+# For bindu deploy --runtime=boxd
+BOXD_API_KEY=<your-key-from-boxd-dashboard>
+# or
+BOXD_TOKEN=<short-lived-token-from-`boxd login --json`>
+```
+
+New optional extra:
+```bash
+pip install 'bindu[runtime-boxd]'
+```
+
+No new required env vars. No changes to existing config.
+
+BREAKING CHANGES
+----------------
+None for users who were not relying on the fail-open behavior — which
+nobody should have been, as it was a bug.
+
+For users on v2026.12.5 with `AUTH__ENABLED=true` and `did:*` OAuth
+clients:
+- Impact: Requests that previously slipped through without an
+  `X-DID-Signature` header will now be rejected with HTTP 403 and reason
+  `missing_signature_headers`. This is the intended behavior; if you
+  observed your agents accepting unsigned requests, that was the bug.
+- Migration: Ensure all `did:*` callers attach `X-DID`, `X-DID-Timestamp`,
+  and `X-DID-Signature` headers (and have `metadata.public_key` registered
+  on their Hydra client). The signing recipe is documented in
+  `docs/AUTHENTICATION.md`.
+
+MIGRATION NOTES
+---------------
+
+For Existing Deployments:
+1. **Upgrade immediately.** The security fix is non-negotiable for any
+   public-facing agent running `AUTH__ENABLED=true` with `did:*` clients.
+2. Re-verify all DID clients sign every request. The new fail-closed
+   behavior surfaces previously-silent misbehavior; some clients may need
+   to be fixed to actually sign.
+3. If a client's Hydra registration is missing `metadata.public_key`,
+   register the base58 Ed25519 public key and re-test.
+
+For New Cloud Deploys:
+1. `pip install 'bindu[runtime-boxd]'`, export `BOXD_API_KEY`, and run
+   `bindu deploy <your-script>.py --runtime=boxd`. The new
+   `docs/runtime/quickstart.md` walks through the full first-time flow.
+
+SECURITY CONSIDERATIONS
+-----------------------
+- **High-severity fix.** Pre-2026.20.2 behavior reduced the documented
+  two-layer auth model to OAuth-only for any `did:*` caller willing to
+  omit the signature header. A stolen bearer token (e.g., from a log
+  exfiltration, memory dump, or compromised CI secret) was sufficient
+  to impersonate the agent for the full token TTL. Post-fix, the
+  attacker would additionally need the agent's Ed25519 private key,
+  which never travels over the wire.
+- Hydra token cache revocation lag closed — revoked tokens no longer
+  remain valid for up to 5 minutes via the introspection cache.
+- Boxd deploy denies the source packager from shipping `.env`, `.pem`,
+  `.key`, `credentials*`, SSH/AWS/GnuPG/Bindu config directories, and
+  similar secret-bearing artifacts. Operator-visible stderr warning
+  prints what was dropped.
+- `BOXD_API_KEY` stays on the host. It is never copied into the VM,
+  never tarballed, never logged.
+- Source-packager review found no symlink, traversal, or shell-injection
+  vectors in the deploy code path.
+
+PERFORMANCE IMPACT
+------------------
+- Hybrid auth: negligible overhead added by the new fail-closed branches
+  — both are early returns before any cryptography runs.
+- Boxd deploy: cold path 10–60s depending on dep weight; warm redeploy
+  1–15s with state preservation via suspend/resume.
+- Gateway recipes: lazy loading keeps planner system prompts compact.
+
+TESTING
+-------
+✅ 935 unit tests passing (3 skipped, 7 warnings) in ~4 seconds.
+✅ 7 new unit tests pin the DID signature fail-closed behavior:
+   `tests/unit/server/middleware/test_hydra_did_signature.py`.
+✅ 96 unit tests cover the runtime provider, boxd provider, source
+   packager, deploy CLI, logs/shell subcommands, and provider contract.
+✅ Token-cache revocation lag coverage added in
+   `tests/unit/server/middleware/test_hydra_token_cache.py`.
+✅ Gated real-boxd e2e at `tests/e2e/runtime/test_boxd_e2e.py` (requires
+   `BOXD_E2E=1` plus `BOXD_API_KEY` to run). Verified against production
+   boxd: cold deploy, warm redeploy, A2A round-trip with DID-signed
+   artifact, suspend/resume.
+✅ Pre-commit clean: ruff, ruff-format, ty, bandit, detect-secrets,
+   pydocstyle, plus whitespace and large-file guards.
+
+KNOWN ISSUES
+------------
+- `bindu deploy --on-exit=suspend` does not always fire its cleanup
+  handler when the host process receives SIGINT from a non-interactive
+  shell (e.g., a CI script). The VM keeps running until manually
+  suspended via the boxd Python SDK or dashboard. Interactive Ctrl-C
+  from a real terminal works correctly. Tracked for a follow-up patch.
+- The boxd Python SDK 0.1.1 `box.suspend()` method returns success but
+  may not actually suspend the VM in some configurations; `box.stop()`
+  is reliable. Recommend bumping the boxd floor to >=0.1.2 in a
+  follow-up.
+- `examples/beginner/dspy_agent.py` requires `dspy`, which is not in
+  the `bindu[agents]` extra. Install separately with `pip install dspy`.
+
+FILES CHANGED
+-------------
+New Modules:
+- `bindu/runtime/{__init__,base,boxd_provider,config,in_process,source_packager}.py`
+- `bindu/cli/{__init__,__main__}.py` (rewritten for multi-command CLI)
+- `tests/unit/runtime/` (12 test files, 96 tests)
+- `tests/e2e/runtime/` (4 files, gated)
+
+Modified for Security:
+- `bindu/server/middleware/auth/hydra.py` (DID signature fail-closed)
+- Token introspection cache invalidation paths
+
+New Examples:
+- `examples/runtime-boxd-agent/`
+- `examples/hermes_agent/`
+
+New Documentation:
+- `docs/runtime/{README,quickstart,boxd,custom-image}.md`
+- `bugs/core/2026-04-18-did-signature-fail-open.md`
+- `bugs/core/2026-04-26-hydra-token-cache-revocation-lag.md`
+
+Updated:
+- Top-level `README.md` (deploy-to-cloud section added)
+- `pyproject.toml` (new `runtime-boxd` extra; dev group pulls it in)
+- Localized READMEs synchronized
+
+CONTRIBUTORS
+------------
+Lead maintainer:
+- Raahul Dutta (220 commits)
+
+Major feature contributor:
+- MichielMAnalytics — Boxd RuntimeProvider integration (PR #527, 3878 lines)
+
+Community:
+- Paraschamoli — examples and README fixes
+- Subhajit Das
+- chandan-1427
+- Sam Morris
+- kenji_ANKAN
+- Neha Pandey
+- CHANDAN
+- swatimonalisasolulab
+- sjhddh
+- Yash Kunwar
+- NexionisJake
+- Konal Puri
+- Jerphin Asmi
+- JAGAN-KARTHICK-A
+- Brian Code
+- itsA-D
+
+Special thanks to the boxd team for the platform and SDK.
