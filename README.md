@@ -149,6 +149,24 @@ bindufy(config, handler)
 Run it, and the agent is live at the configured URL. Need a different port? Export `BINDU_PORT=4000` - no code change.
 
 <details>
+<summary>Ship the same script to a public HTTPS URL (boxd microVM)</summary>
+
+The script above runs on your laptop. When you want it on the public internet without writing any deploy code, one command takes that *exact same file* and runs it inside a [boxd](https://boxd.sh) microVM with its own HTTPS domain:
+
+```bash
+pip install 'bindu[runtime-boxd]'
+export BOXD_API_KEY="<your-key-from-boxd-dashboard>"
+bindu deploy research_agent.py --runtime=boxd
+# ✓ research_agent serving at https://research_agent.boxd.sh
+```
+
+Cold deploy ~60s, warm redeploy ~15s, Ctrl-C suspends the VM (state preserved). Pass secrets in with `--env KEY=VALUE`; bindu refuses to upload `.env` files for safety. Full walkthrough in [`docs/runtime/quickstart.md`](docs/runtime/quickstart.md), flag reference in [`docs/runtime/boxd.md`](docs/runtime/boxd.md).
+
+The deploy logic lives in the CLI, not in your script — same code runs locally and in the cloud. Other runtime providers (Modal, Fly, e2b) can plug into the same abstraction.
+
+</details>
+
+<details>
 <summary>TypeScript equivalent</summary>
 
 ```typescript

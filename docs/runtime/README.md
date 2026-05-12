@@ -60,6 +60,8 @@ detaches; the VM auto-suspends after 60s of inactivity. Re-running
 
 ## See also
 
+- **[quickstart.md](quickstart.md)** — friendly walkthrough for your first deploy.
+  Start here if you've never used `bindu deploy` before.
 - [boxd.md](boxd.md) — full `bindu deploy` flag reference for the boxd runtime.
 - [custom-image.md](custom-image.md) — A1 mode (user-built Docker images).
 - [`docs/superpowers/specs/2026-04-29-bindu-runtime-design.md`](../superpowers/specs/2026-04-29-bindu-runtime-design.md) — design rationale.
