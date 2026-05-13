@@ -402,7 +402,11 @@ class TestMessageHandlers:
             captured["code"] = code
             captured["message"] = message
             captured["request_id"] = request_id
-            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {"code": code, "message": message},
+            }
 
         handler = MessageHandlers(
             scheduler=AsyncMock(),

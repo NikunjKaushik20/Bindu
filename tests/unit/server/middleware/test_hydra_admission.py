@@ -75,9 +75,7 @@ class TestDidAdmission:
     def test_config_without_allowed_dids_attribute_admits(self, monkeypatch):
         """Backwards compatibility: pre-existing AuthSettings objects that
         lack the new field must default to admit-all, not crash."""
-        monkeypatch.setattr(
-            HydraMiddleware, "_initialize_provider", lambda self: None
-        )
+        monkeypatch.setattr(HydraMiddleware, "_initialize_provider", lambda self: None)
         config = Mock(spec=["public_endpoints"])
         config.public_endpoints = []
         mw = HydraMiddleware(app=Mock(), auth_config=config)
@@ -91,9 +89,7 @@ class TestAdmissionFlow:
     not forward to the wrapped app."""
 
     @pytest.mark.asyncio
-    async def test_rejected_request_returns_403_and_does_not_forward(
-        self, monkeypatch
-    ):
+    async def test_rejected_request_returns_403_and_does_not_forward(self, monkeypatch):
         mw = _middleware(monkeypatch, allowed_dids=[ALICE_DID])
 
         # The wrapped app must not be called when admission is denied.
@@ -142,6 +138,8 @@ class TestAdmissionFlow:
         # Wrapped app was not called.
         app_mock.assert_not_awaited()
         # A 403 response was sent.
-        start_messages = [m for m in sent_messages if m.get("type") == "http.response.start"]
+        start_messages = [
+            m for m in sent_messages if m.get("type") == "http.response.start"
+        ]
         assert start_messages, "no http.response.start emitted"
         assert start_messages[0]["status"] == 403
