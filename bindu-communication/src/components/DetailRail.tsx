@@ -176,16 +176,22 @@ function VerifyBody() {
 		<div className="space-y-1 text-[12px]">
 			<VerifyRow
 				label="Signature"
-				value={event.verify.signature ? "✓ valid (Ed25519)" : "— unsigned event"}
+				value={
+					event.verify.signature
+						? "✓ verified"
+						: "— no signature on this event (transport-authenticated only)"
+				}
 				ok={event.verify.signature}
+				neutralWhenFalse
 			/>
 			<VerifyRow
 				label="Resolved agent DID"
-				value={resolvedDidId ?? "resolving…"}
+				value={resolvedDidId ?? "resolving… (or no /.well-known/did.json)"}
 				ok={!!resolvedDidId}
+				neutralWhenFalse
 				mono
 			/>
-			<VerifyRow label="Nonce" value={event.verify.nonce} ok mono />
+			<VerifyRow label="Event nonce" value={event.verify.nonce} ok mono />
 			<VerifyRow label="Timestamp" value={event.ts} ok mono />
 
 			<div className="mt-4 rounded-md border border-[--color-border-soft] bg-slate-50 p-3">
@@ -326,11 +332,13 @@ function VerifyRow({
 	value,
 	ok,
 	mono,
+	neutralWhenFalse,
 }: {
 	label: string;
 	value: string;
 	ok: boolean;
 	mono?: boolean;
+	neutralWhenFalse?: boolean;
 }) {
 	return (
 		<div className="flex items-start justify-between gap-3 border-b border-[--color-border-soft] py-2">
@@ -341,7 +349,11 @@ function VerifyRow({
 				className={clsx(
 					"text-right text-[11px]",
 					mono && "font-mono",
-					ok ? "text-emerald-700" : "text-rose-700",
+					ok
+						? "text-emerald-700"
+						: neutralWhenFalse
+							? "text-fg-muted"
+							: "text-rose-700",
 				)}
 			>
 				{value}

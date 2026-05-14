@@ -161,6 +161,11 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 						? `state → ${state}${p.final ? " · final" : ""}`
 						: "(unknown state)";
 
+	// Lifecycle + artifact events from push_manager don't carry signature
+	// material in the payload itself — they're transport-authenticated by
+	// the webhook URL/token, not cryptographically signed. Mark honestly
+	// as unsigned. Real Ed25519 verification of artifact bodies is a
+	// future change.
 	return {
 		id: raw.id,
 		agentId: raw.agentId,
@@ -176,10 +181,10 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 		summary,
 		needsAttention: state ? ATTENTION_STATES.has(state) || undefined : undefined,
 		action: state ? ACTION_FOR_STATE[state] : undefined,
-		signed: true,
+		signed: false,
 		verify: {
-			signature: true,
-			didMatch: true,
+			signature: false,
+			didMatch: false,
 			nonce: (p.event_id ?? "").slice(0, 8) || "—",
 		},
 		payload: JSON.stringify(p, null, 2),
