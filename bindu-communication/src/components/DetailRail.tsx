@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
@@ -7,6 +8,29 @@ import type { DetailTab } from "~/types";
 function useAllEvents() {
 	const liveEvents = useUI((s) => s.liveEvents);
 	return [...liveEvents, ...mockEvents];
+}
+
+interface ResolvedAgent {
+	id: string;
+	url?: string;
+	did?: { id?: string; verificationMethod?: Array<Record<string, unknown>> } | null;
+	agentCard?: { name?: string; capabilities?: unknown; skills?: unknown } | null;
+	resolvedAt?: string;
+}
+
+function useResolvedAgent(agentId: string | undefined): ResolvedAgent | null {
+	const [data, setData] = useState<ResolvedAgent | null>(null);
+	useEffect(() => {
+		if (!agentId) return setData(null);
+		setData(null);
+		const ctrl = new AbortController();
+		fetch(`/api/agents/${encodeURIComponent(agentId)}`, { signal: ctrl.signal })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((j) => setData(j))
+			.catch(() => {});
+		return () => ctrl.abort();
+	}, [agentId]);
+	return data;
 }
 
 const TABS: { k: DetailTab; label: string; hint: string }[] = [
@@ -132,27 +156,7 @@ function GlanceBody() {
 				</Section>
 			)}
 
-			{event.action && (
-				<div className="rounded-md border border-yellow-300 bg-yellow-50 p-3">
-					<div className="text-[10px] uppercase tracking-[0.15em] text-yellow-800">
-						Action required
-					</div>
-					<div className="mt-2 flex gap-2">
-						<button
-							type="button"
-							className="rounded-md bg-[--color-sunflower] px-3 py-1.5 text-[12px] font-medium text-yellow-900 transition hover:bg-[--color-sunflower-strong]"
-						>
-							{event.action.label}
-						</button>
-						<button
-							type="button"
-							className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
-						>
-							Decline
-						</button>
-					</div>
-				</div>
-			)}
+			{event.action && <ActionPanel eventId={event.id} actionKind={event.action.kind} actionLabel={event.action.label} />}
 		</div>
 	);
 }
@@ -160,21 +164,26 @@ function GlanceBody() {
 function VerifyBody() {
 	const selectedEventId = useUI((s) => s.selectedEventId);
 	const event = useAllEvents().find((e) => e.id === selectedEventId);
+	const resolved = useResolvedAgent(event?.agentId);
 	if (!event) return null;
+
+	const resolvedDidId = resolved?.did?.id;
+	const resolvedDoc = resolved?.did
+		? JSON.stringify(resolved.did, null, 2)
+		: null;
 
 	return (
 		<div className="space-y-1 text-[12px]">
 			<VerifyRow
 				label="Signature"
-				value={event.verify.signature ? "✓ valid (Ed25519)" : "✗ invalid"}
+				value={event.verify.signature ? "✓ valid (Ed25519)" : "— unsigned event"}
 				ok={event.verify.signature}
 			/>
 			<VerifyRow
-				label="DID document"
-				value={
-					event.verify.didMatch ? "✓ key matches resolved doc" : "✗ key mismatch"
-				}
-				ok={event.verify.didMatch}
+				label="Resolved agent DID"
+				value={resolvedDidId ?? "resolving…"}
+				ok={!!resolvedDidId}
+				mono
 			/>
 			<VerifyRow label="Nonce" value={event.verify.nonce} ok mono />
 			<VerifyRow label="Timestamp" value={event.ts} ok mono />
@@ -183,14 +192,13 @@ function VerifyBody() {
 				<div className="text-[10px] uppercase tracking-[0.15em] text-fg-dim">
 					Resolved DID document
 				</div>
-				<pre className="mt-2 overflow-x-auto text-[10px] text-slate-700">{`{
-  "id": "${event.counterparty.did}",
-  "verificationMethod": [{
-    "id": "${event.counterparty.did}#key-1",
-    "type": "Ed25519VerificationKey2020",
-    "publicKeyMultibase": "z6Mk…${event.verify.nonce.slice(0, 4)}"
-  }]
-}`}</pre>
+				{resolvedDoc ? (
+					<pre className="mt-2 overflow-x-auto text-[10px] text-slate-700">{resolvedDoc}</pre>
+				) : (
+					<div className="mt-2 text-[11px] text-fg-dim">
+						No DID document published by this agent (or comms hasn't mapped its URL).
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -218,6 +226,86 @@ function InspectBody() {
 					req_{event.id}_{event.verify.nonce}
 				</div>
 			</Section>
+		</div>
+	);
+}
+
+function ActionPanel({
+	eventId,
+	actionKind,
+	actionLabel,
+}: {
+	eventId: string;
+	actionKind: "approve" | "decline" | "input" | "pay";
+	actionLabel: string;
+}) {
+	const [text, setText] = useState("");
+	const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+	const [errMsg, setErrMsg] = useState<string | null>(null);
+
+	async function send(kind: "approve" | "decline" | "input" | "pay", body?: { text?: string }) {
+		setStatus("sending");
+		setErrMsg(null);
+		try {
+			const r = await fetch(`/api/events/${encodeURIComponent(eventId)}/action`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ kind, ...body }),
+			});
+			const j = await r.json().catch(() => ({}));
+			if (r.ok && j.ok !== false) {
+				setStatus("sent");
+				setText("");
+			} else {
+				setStatus("error");
+				setErrMsg(j.error ?? `HTTP ${r.status}`);
+			}
+		} catch (e) {
+			setStatus("error");
+			setErrMsg((e as Error).message);
+		}
+	}
+
+	return (
+		<div className="rounded-md border border-yellow-300 bg-yellow-50 p-3">
+			<div className="text-[10px] uppercase tracking-[0.15em] text-yellow-800">
+				Action required
+			</div>
+			{actionKind === "input" && (
+				<textarea
+					value={text}
+					onChange={(e) => setText(e.target.value)}
+					placeholder="Type your response…"
+					rows={2}
+					className="mt-2 w-full resize-none rounded-md border border-yellow-200 bg-white px-2 py-1.5 text-[12px] text-fg placeholder-fg-faint outline-none focus:border-yellow-500"
+				/>
+			)}
+			<div className="mt-2 flex gap-2">
+				<button
+					type="button"
+					disabled={status === "sending" || (actionKind === "input" && !text.trim())}
+					onClick={() => send(actionKind, actionKind === "input" ? { text } : undefined)}
+					className="rounded-md bg-[--color-sunflower] px-3 py-1.5 text-[12px] font-medium text-yellow-900 transition hover:bg-[--color-sunflower-strong] disabled:opacity-50"
+				>
+					{status === "sending" ? "Sending…" : actionLabel}
+				</button>
+				{actionKind !== "decline" && (
+					<button
+						type="button"
+						disabled={status === "sending"}
+						onClick={() => send("decline")}
+						className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+					>
+						Decline
+					</button>
+				)}
+			</div>
+			{status === "sent" && (
+				<div className="mt-2 text-[10px] text-emerald-700">✓ delivered</div>
+			)}
+			{status === "error" && (
+				<div className="mt-2 text-[10px] text-rose-700">✗ {errMsg}</div>
+			)}
 		</div>
 	);
 }
