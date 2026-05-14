@@ -6,6 +6,7 @@ import asyncio
 import http.client
 import ipaddress
 import json
+import os
 import socket
 import ssl
 from dataclasses import dataclass
@@ -59,6 +60,9 @@ def _resolve_and_check_ip(hostname: str) -> str:
         raise ValueError(
             f"Push notification URL hostname could not be resolved: {exc}"
         ) from exc
+
+    if os.getenv("BINDU_ALLOW_PRIVATE_WEBHOOK_RANGES", "").lower() in {"1", "true", "yes"}:
+        return resolved_ip
 
     for blocked in _BLOCKED_NETWORKS:
         if addr in blocked:

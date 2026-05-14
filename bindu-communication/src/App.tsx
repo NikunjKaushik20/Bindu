@@ -10,9 +10,12 @@ import { StreamPanel } from "~/components/StreamPanel";
 import { DetailRail } from "~/components/DetailRail";
 import { RegisterModal } from "~/components/RegisterModal";
 import { useUI } from "~/state";
+import { mapWebhookToEvent } from "~/lib/liveStream";
 
 function Shell() {
 	const openRegister = useUI((s) => s.openRegister);
+	const addLiveEvent = useUI((s) => s.addLiveEvent);
+
 	useEffect(() => {
 		function onKey(e: KeyboardEvent) {
 			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
@@ -23,6 +26,18 @@ function Shell() {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [openRegister]);
+
+	useEffect(() => {
+		const es = new EventSource("/api/events/stream");
+		es.onmessage = (msg) => {
+			try {
+				addLiveEvent(mapWebhookToEvent(JSON.parse(msg.data)));
+			} catch (err) {
+				console.warn("bad event", err);
+			}
+		};
+		return () => es.close();
+	}, [addLiveEvent]);
 
 	return (
 		<div className="flex h-screen w-full overflow-hidden text-fg">

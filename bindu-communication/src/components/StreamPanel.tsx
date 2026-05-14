@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useParams } from "react-router";
 import clsx from "clsx";
 import { WarningIcon, PauseIcon, PlayIcon } from "@phosphor-icons/react";
-import { agents, events } from "~/data/mock";
+import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
 import { EventRow } from "./EventRow";
@@ -14,11 +14,13 @@ export function StreamPanel() {
 	const streamPaused = useUI((s) => s.streamPaused);
 	const togglePause = useUI((s) => s.togglePause);
 	const expandedTraces = useUI((s) => s.expandedTraces);
+	const agents = useUI((s) => s.agents);
+	const liveEvents = useUI((s) => s.liveEvents);
 
 	const agent = agents.find((a) => a.id === agentId) ?? agents[0];
 
 	const visible = useMemo(() => {
-		const list = events
+		const list = [...liveEvents, ...mockEvents]
 			.filter((e) => e.agentId === agentId)
 			.sort((a, b) => b.ts.localeCompare(a.ts));
 		const out: typeof list = [];
@@ -30,11 +32,16 @@ export function StreamPanel() {
 			}
 		}
 		return out;
-	}, [agentId, expandedTraces]);
+	}, [agentId, expandedTraces, liveEvents]);
 
 	const childrenIds = useMemo(
-		() => new Set(events.filter((e) => e.parentId).map((e) => e.parentId!)),
-		[],
+		() =>
+			new Set(
+				[...liveEvents, ...mockEvents]
+					.filter((e) => e.parentId)
+					.map((e) => e.parentId!),
+			),
+		[liveEvents],
 	);
 
 	const attention = visible.filter((e) => e.needsAttention);

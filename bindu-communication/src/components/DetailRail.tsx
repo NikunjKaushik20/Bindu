@@ -1,8 +1,13 @@
 import clsx from "clsx";
-import { events } from "~/data/mock";
+import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
 import { stateMeta, trustMeta } from "~/lib/format";
 import type { DetailTab } from "~/types";
+
+function useAllEvents() {
+	const liveEvents = useUI((s) => s.liveEvents);
+	return [...liveEvents, ...mockEvents];
+}
 
 const TABS: { k: DetailTab; label: string; hint: string }[] = [
 	{ k: "glance", label: "Glance", hint: "operator" },
@@ -14,7 +19,8 @@ export function DetailRail() {
 	const selectedEventId = useUI((s) => s.selectedEventId);
 	const detailTab = useUI((s) => s.detailTab);
 	const setDetailTab = useUI((s) => s.setDetailTab);
-	const event = events.find((e) => e.id === selectedEventId) ?? null;
+	const allEvents = useAllEvents();
+	const event = allEvents.find((e) => e.id === selectedEventId) ?? null;
 
 	if (!event) {
 		return (
@@ -102,7 +108,7 @@ export function DetailRail() {
 
 function GlanceBody() {
 	const selectedEventId = useUI((s) => s.selectedEventId);
-	const event = events.find((e) => e.id === selectedEventId);
+	const event = useAllEvents().find((e) => e.id === selectedEventId);
 	if (!event) return null;
 
 	return (
@@ -153,7 +159,7 @@ function GlanceBody() {
 
 function VerifyBody() {
 	const selectedEventId = useUI((s) => s.selectedEventId);
-	const event = events.find((e) => e.id === selectedEventId);
+	const event = useAllEvents().find((e) => e.id === selectedEventId);
 	if (!event) return null;
 
 	return (
@@ -192,7 +198,7 @@ function VerifyBody() {
 
 function InspectBody() {
 	const selectedEventId = useUI((s) => s.selectedEventId);
-	const event = events.find((e) => e.id === selectedEventId);
+	const event = useAllEvents().find((e) => e.id === selectedEventId);
 	if (!event) return null;
 
 	return (

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, AgentRole, DetailTab } from "~/types";
+import type { Agent, AgentRole, DetailTab, StreamEvent } from "~/types";
 import { agents as seedAgents } from "~/data/mock";
 
 export type TrustPolicy =
@@ -22,6 +22,7 @@ interface UIState {
 	scopeFilter: string | null;
 	showRegister: boolean;
 	agents: Agent[];
+	liveEvents: StreamEvent[];
 
 	selectEvent: (id: string | null) => void;
 	setDetailTab: (tab: DetailTab) => void;
@@ -31,6 +32,7 @@ interface UIState {
 	openRegister: () => void;
 	closeRegister: () => void;
 	registerAgent: (draft: NewAgentDraft) => Agent;
+	addLiveEvent: (e: StreamEvent) => void;
 }
 
 export const useUI = create<UIState>((set) => ({
@@ -41,6 +43,7 @@ export const useUI = create<UIState>((set) => ({
 	scopeFilter: null,
 	showRegister: false,
 	agents: seedAgents,
+	liveEvents: [],
 
 	selectEvent: (id) => set({ selectedEventId: id }),
 	setDetailTab: (tab) => set({ detailTab: tab }),
@@ -73,4 +76,21 @@ export const useUI = create<UIState>((set) => ({
 		set((s) => ({ agents: [...s.agents, newAgent], showRegister: false }));
 		return newAgent;
 	},
+	addLiveEvent: (e) =>
+		set((s) => {
+			const agents = s.agents.find((a) => a.id === e.agentId)
+				? s.agents
+				: [
+						...s.agents,
+						{
+							id: e.agentId,
+							name: e.agentId,
+							did: `did:bindu:?:${e.agentId}`,
+							unread: 0,
+							needsAttention: 0,
+							role: "agent" as const,
+						},
+					];
+			return { liveEvents: [e, ...s.liveEvents].slice(0, 500), agents };
+		}),
 }));
