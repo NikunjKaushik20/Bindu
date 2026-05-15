@@ -24,7 +24,9 @@ db.exec(`
 		url          TEXT,
 		did          TEXT,
 		agent_card   TEXT,
-		resolved_at  TEXT
+		resolved_at  TEXT,
+		source       TEXT NOT NULL DEFAULT 'webhook',
+		added_at     TEXT
 	);
 
 	CREATE TABLE IF NOT EXISTS contexts (
@@ -51,6 +53,15 @@ const eventColumns = db
 if (!eventColumns.some((c) => c.name === "first_contact")) {
 	db.exec("ALTER TABLE events ADD COLUMN first_contact INTEGER NOT NULL DEFAULT 0");
 }
+const agentColumns = db
+	.prepare("PRAGMA table_info(agents)")
+	.all() as Array<{ name: string }>;
+if (!agentColumns.some((c) => c.name === "source")) {
+	db.exec("ALTER TABLE agents ADD COLUMN source TEXT NOT NULL DEFAULT 'webhook'");
+}
+if (!agentColumns.some((c) => c.name === "added_at")) {
+	db.exec("ALTER TABLE agents ADD COLUMN added_at TEXT");
+}
 
 const insertEvent = db.prepare(
 	"INSERT OR REPLACE INTO events (id, agent_id, received_at, payload, first_contact) VALUES (?, ?, ?, ?, ?)",
@@ -70,16 +81,20 @@ const upsertContext = db.prepare(
 	"INSERT OR IGNORE INTO contexts (agent_id, context_id, first_seen_at) VALUES (?, ?, ?)",
 );
 const getAgent = db.prepare(
-	"SELECT id, url, did, agent_card AS agentCard, resolved_at AS resolvedAt FROM agents WHERE id = ?",
+	"SELECT id, url, did, agent_card AS agentCard, resolved_at AS resolvedAt, source, added_at AS addedAt FROM agents WHERE id = ?",
+);
+const listAllAgents = db.prepare(
+	"SELECT id, url, did, agent_card AS agentCard, resolved_at AS resolvedAt, source, added_at AS addedAt FROM agents ORDER BY added_at DESC, resolved_at DESC",
 );
 const upsertAgent = db.prepare(`
-	INSERT INTO agents (id, url, did, agent_card, resolved_at)
-	VALUES (@id, @url, @did, @agentCard, @resolvedAt)
+	INSERT INTO agents (id, url, did, agent_card, resolved_at, source, added_at)
+	VALUES (@id, @url, @did, @agentCard, @resolvedAt, @source, @addedAt)
 	ON CONFLICT(id) DO UPDATE SET
-		url = excluded.url,
-		did = excluded.did,
-		agent_card = excluded.agent_card,
-		resolved_at = excluded.resolved_at
+		url = COALESCE(excluded.url, agents.url),
+		did = COALESCE(excluded.did, agents.did),
+		agent_card = COALESCE(excluded.agent_card, agents.agent_card),
+		resolved_at = excluded.resolved_at,
+		source = CASE WHEN agents.source = 'manual' THEN 'manual' ELSE excluded.source END
 `);
 
 const MAX_EVENTS = 1000;
@@ -131,25 +146,39 @@ export interface AgentRecord {
 	did?: unknown;
 	agentCard?: unknown;
 	resolvedAt?: string;
+	source?: "webhook" | "manual";
+	addedAt?: string;
 }
 
-export function readAgent(id: string): AgentRecord | null {
-	type Row = {
-		id: string;
-		url: string | null;
-		did: string | null;
-		agentCard: string | null;
-		resolvedAt: string | null;
-	};
-	const row = getAgent.get(id) as Row | undefined;
-	if (!row) return null;
+type AgentRow = {
+	id: string;
+	url: string | null;
+	did: string | null;
+	agentCard: string | null;
+	resolvedAt: string | null;
+	source: string | null;
+	addedAt: string | null;
+};
+
+function rowToRecord(row: AgentRow): AgentRecord {
 	return {
 		id: row.id,
 		url: row.url ?? undefined,
 		did: row.did ? JSON.parse(row.did) : null,
 		agentCard: row.agentCard ? JSON.parse(row.agentCard) : null,
 		resolvedAt: row.resolvedAt ?? undefined,
+		source: (row.source as "webhook" | "manual") ?? "webhook",
+		addedAt: row.addedAt ?? undefined,
 	};
+}
+
+export function readAgent(id: string): AgentRecord | null {
+	const row = getAgent.get(id) as AgentRow | undefined;
+	return row ? rowToRecord(row) : null;
+}
+
+export function listEcosystem(): AgentRecord[] {
+	return (listAllAgents.all() as AgentRow[]).map(rowToRecord);
 }
 
 export function writeAgent(rec: AgentRecord): void {
@@ -160,5 +189,7 @@ export function writeAgent(rec: AgentRecord): void {
 		agentCard:
 			rec.agentCard === undefined ? null : JSON.stringify(rec.agentCard),
 		resolvedAt: rec.resolvedAt ?? null,
+		source: rec.source ?? "webhook",
+		addedAt: rec.addedAt ?? null,
 	});
 }

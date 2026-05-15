@@ -1,15 +1,49 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router";
-import { PlusIcon } from "@phosphor-icons/react";
+import { PlusIcon, GlobeIcon } from "@phosphor-icons/react";
 import { scopes } from "~/data/mock";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
+import { AddAgentModal } from "./AddAgentModal";
 import clsx from "clsx";
+
+interface EcosystemAgent {
+	id: string;
+	url?: string;
+	did?: { id?: string } | null;
+	agentCard?: { name?: string } | null;
+	source: "webhook" | "manual";
+}
+
+function useEcosystem() {
+	const [list, setList] = useState<EcosystemAgent[]>([]);
+	const [tick, setTick] = useState(0);
+	useEffect(() => {
+		let cancelled = false;
+		const refresh = () =>
+			fetch("/api/ecosystem")
+				.then((r) => (r.ok ? r.json() : []))
+				.then((j) => {
+					if (!cancelled) setList(j as EcosystemAgent[]);
+				})
+				.catch(() => {});
+		refresh();
+		const t = setInterval(refresh, 5000);
+		return () => {
+			cancelled = true;
+			clearInterval(t);
+		};
+	}, [tick]);
+	return { list, reload: () => setTick((n) => n + 1) };
+}
 
 export function Sidebar() {
 	const scopeFilter = useUI((s) => s.scopeFilter);
 	const setScope = useUI((s) => s.setScope);
 	const agents = useUI((s) => s.agents);
 	const openRegister = useUI((s) => s.openRegister);
+	const [showAdd, setShowAdd] = useState(false);
+	const { list: ecosystem, reload: reloadEcosystem } = useEcosystem();
 
 	return (
 		<aside className="flex w-[280px] shrink-0 flex-col border-r border-[--color-border-soft] bg-[--color-sidebar]">
@@ -44,7 +78,7 @@ export function Sidebar() {
 				</button>
 			</div>
 
-			{/* Agents */}
+			{/* Agents (running/recent — Step 1 will fold these into the ecosystem) */}
 			<nav className="px-3 pt-4">
 				<div className="px-2 pb-2 text-[10px] uppercase tracking-[0.15em] text-fg-dim">
 					Agents
@@ -99,6 +133,58 @@ export function Sidebar() {
 				))}
 			</nav>
 
+			{/* Ecosystem — known agents (webhook-seen + manually added) */}
+			<div className="mt-6 px-3">
+				<div className="flex items-center justify-between px-2 pb-2">
+					<div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.15em] text-fg-dim">
+						<GlobeIcon size={11} weight="bold" />
+						Ecosystem
+					</div>
+					<button
+						type="button"
+						onClick={() => setShowAdd(true)}
+						title="Add agent by URL"
+						className="rounded p-0.5 text-fg-dim transition hover:bg-slate-100 hover:text-[--color-cobalt]"
+					>
+						<PlusIcon size={12} weight="bold" />
+					</button>
+				</div>
+				{ecosystem.length === 0 ? (
+					<div className="px-2 py-1 text-[10px] text-fg-dim">
+						No agents yet. Click + to add by URL.
+					</div>
+				) : (
+					ecosystem.map((a) => {
+						const name = a.agentCard?.name ?? a.id;
+						const didId = a.did?.id ?? `did:bindu:?:${a.id}`;
+						return (
+							<div
+								key={a.id}
+								className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left"
+								title={didId}
+							>
+								<span
+									className={clsx(
+										"flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold",
+										a.source === "manual"
+											? "bg-[--color-cobalt-soft] text-[--color-cobalt-strong]"
+											: "bg-yellow-100 text-yellow-800",
+									)}
+								>
+									{a.source === "manual" ? "+" : "●"}
+								</span>
+								<div className="min-w-0 flex-1">
+									<div className="truncate text-[12px] text-fg">{name}</div>
+									<div className="truncate text-[10px] text-fg-dim">
+										{shortDid(didId)}
+									</div>
+								</div>
+							</div>
+						);
+					})
+				)}
+			</div>
+
 			{/* Scopes */}
 			<div className="mt-6 px-3">
 				<div className="px-2 pb-2 text-[10px] uppercase tracking-[0.15em] text-fg-dim">
@@ -131,6 +217,12 @@ export function Sidebar() {
 					did:bindu:raahul:0001
 				</div>
 			</div>
+
+			<AddAgentModal
+				open={showAdd}
+				onClose={() => setShowAdd(false)}
+				onAdded={() => reloadEcosystem()}
+			/>
 		</aside>
 	);
 }

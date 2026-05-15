@@ -4,6 +4,7 @@ import {
 	type AgentRecord,
 	type EventRow,
 	listAgents,
+	listEcosystem,
 	listRecentEvents,
 	readAgent,
 	recordEvent,
@@ -70,22 +71,27 @@ function authMiddleware(c: {
 	return { error: "unauthorized" } as const;
 }
 
+async function fetchWellKnown(base: string) {
+	const [didR, cardR] = await Promise.all([
+		fetch(`${base}/.well-known/did.json`).then((r) => (r.ok ? r.json() : null)),
+		fetch(`${base}/.well-known/agent.json`).then((r) => (r.ok ? r.json() : null)),
+	]);
+	return { did: didR as unknown, agentCard: cardR as unknown };
+}
+
 async function resolveAgent(agentId: string): Promise<AgentRecord> {
 	const cached = readAgent(agentId);
 	if (cached?.did && cached?.agentCard) return cached;
-	const base = AGENT_URLS[agentId];
-	const rec: AgentRecord = cached ?? { id: agentId, url: base };
+	const base = cached?.url ?? AGENT_URLS[agentId];
+	const rec: AgentRecord = cached ?? { id: agentId, url: base, source: "webhook" };
 	if (!base) {
 		writeAgent(rec);
 		return rec;
 	}
 	try {
-		const [didR, cardR] = await Promise.all([
-			fetch(`${base}/.well-known/did.json`).then((r) => (r.ok ? r.json() : null)),
-			fetch(`${base}/.well-known/agent.json`).then((r) => (r.ok ? r.json() : null)),
-		]);
-		rec.did = didR;
-		rec.agentCard = cardR;
+		const { did, agentCard } = await fetchWellKnown(base);
+		rec.did = did;
+		rec.agentCard = agentCard;
 		rec.url = base;
 		rec.resolvedAt = new Date().toISOString();
 	} catch (err) {
@@ -93,6 +99,14 @@ async function resolveAgent(agentId: string): Promise<AgentRecord> {
 	}
 	writeAgent(rec);
 	return rec;
+}
+
+function slugify(s: string): string {
+	const cleaned = s
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/(^-|-$)/g, "");
+	return cleaned || `agent-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 const app = new Hono();
@@ -118,6 +132,14 @@ app.post("/webhooks/bindu/:agentId", async (c) => {
 		`[webhook] ${agentId} ${payload.kind ?? "?"} ${payload.task_id ?? ""}${firstContact ? " (first-contact)" : ""}`,
 	);
 	const seen = readAgent(agentId);
+	if (!seen) {
+		writeAgent({
+			id: agentId,
+			url: AGENT_URLS[agentId],
+			source: "webhook",
+			addedAt: new Date().toISOString(),
+		});
+	}
 	if (!seen?.agentCard) {
 		resolveAgent(agentId).catch(() => {});
 	}
@@ -163,6 +185,62 @@ app.get("/api/agents/:agentId", async (c) => {
 	if (blocked) return c.json(blocked, 401);
 	const rec = await resolveAgent(c.req.param("agentId"));
 	return c.json(rec);
+});
+
+// Ecosystem — every known agent (webhook-seen + manually added). The Gmail-
+// shaped inbox uses this list as the "Contacts / Senders" surface. POST
+// here to add a third-party agent by URL; the server fetches its well-known
+// docs and stores a slugified record.
+app.get("/api/ecosystem", (c) => {
+	const blocked = authMiddleware(c);
+	if (blocked) return c.json(blocked, 401);
+	return c.json(listEcosystem());
+});
+
+app.post("/api/ecosystem", async (c) => {
+	const blocked = authMiddleware(c);
+	if (blocked) return c.json(blocked, 401);
+	const body = (await c.req.json().catch(() => ({}))) as {
+		url?: string;
+		id?: string;
+	};
+	const url = (body.url ?? "").replace(/\/+$/, "");
+	if (!/^https?:\/\//.test(url)) {
+		return c.json({ error: "invalid-url" }, 400);
+	}
+	let did: unknown = null;
+	let agentCard: unknown = null;
+	try {
+		const r = await fetchWellKnown(url);
+		did = r.did;
+		agentCard = r.agentCard;
+	} catch (err) {
+		return c.json({ error: "fetch-failed", detail: (err as Error).message }, 502);
+	}
+	const cardObj = (agentCard ?? {}) as Record<string, unknown>;
+	const name =
+		typeof cardObj.name === "string" && cardObj.name.length > 0
+			? (cardObj.name as string)
+			: typeof cardObj.id === "string"
+				? (cardObj.id as string)
+				: "agent";
+	const id = body.id && AGENT_ID_RE.test(body.id) ? body.id : slugify(name);
+	if (!AGENT_ID_RE.test(id)) {
+		return c.json({ error: "could-not-derive-id" }, 400);
+	}
+	const now = new Date().toISOString();
+	const rec: AgentRecord = {
+		id,
+		url,
+		did,
+		agentCard,
+		resolvedAt: now,
+		source: "manual",
+		addedAt: now,
+	};
+	writeAgent(rec);
+	if (!(id in AGENT_URLS)) AGENT_URLS[id] = url;
+	return c.json(rec, 201);
 });
 
 // Phase 5: action callbacks. Looks up the source agent, sends a follow-up

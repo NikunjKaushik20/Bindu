@@ -1,0 +1,142 @@
+import { useEffect, useState } from "react";
+import clsx from "clsx";
+import { XIcon, GlobeIcon } from "@phosphor-icons/react";
+
+interface Props {
+	open: boolean;
+	onClose: () => void;
+	onAdded: () => void;
+}
+
+export function AddAgentModal({ open, onClose, onAdded }: Props) {
+	const [url, setUrl] = useState("");
+	const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+	const [errMsg, setErrMsg] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (open) {
+			setUrl("");
+			setStatus("idle");
+			setErrMsg(null);
+		}
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) return;
+		function onKey(e: KeyboardEvent) {
+			if (e.key === "Escape") onClose();
+		}
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [open, onClose]);
+
+	if (!open) return null;
+
+	const trimmed = url.trim();
+	const canSubmit = /^https?:\/\//.test(trimmed) && status !== "loading";
+
+	async function handleSubmit(e: React.FormEvent) {
+		e.preventDefault();
+		if (!canSubmit) return;
+		setStatus("loading");
+		setErrMsg(null);
+		try {
+			const r = await fetch("/api/ecosystem", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ url: trimmed }),
+			});
+			const j = (await r.json().catch(() => ({}))) as {
+				error?: string;
+				detail?: string;
+			};
+			if (!r.ok) {
+				setStatus("error");
+				setErrMsg(j.detail ?? j.error ?? `HTTP ${r.status}`);
+				return;
+			}
+			onAdded();
+			onClose();
+		} catch (err) {
+			setStatus("error");
+			setErrMsg((err as Error).message);
+		}
+	}
+
+	return (
+		<div
+			className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
+			onClick={onClose}
+		>
+			<form
+				onSubmit={handleSubmit}
+				onClick={(e) => e.stopPropagation()}
+				className="w-[480px] max-w-[92vw] rounded-lg border border-[--color-border] bg-white shadow-2xl"
+			>
+				<div className="flex items-center gap-2.5 border-b border-[--color-border-soft] px-5 py-3">
+					<GlobeIcon size={18} weight="duotone" className="text-[--color-cobalt]" />
+					<div className="flex-1">
+						<h2 className="text-[14px] font-medium text-fg">Add agent to ecosystem</h2>
+						<div className="text-[10px] text-fg-dim">
+							Paste the agent's base URL. We'll fetch its agent card + DID document.
+						</div>
+					</div>
+					<button
+						type="button"
+						onClick={onClose}
+						className="rounded p-1 text-fg-dim transition hover:bg-slate-100 hover:text-fg"
+					>
+						<XIcon size={14} weight="bold" />
+					</button>
+				</div>
+
+				<div className="space-y-3 px-5 py-5">
+					<div>
+						<label className="block text-[10px] uppercase tracking-[0.15em] text-fg-dim">
+							Agent URL
+						</label>
+						<input
+							autoFocus
+							type="text"
+							value={url}
+							onChange={(e) => setUrl(e.target.value)}
+							placeholder="http://localhost:3773"
+							className="mt-1.5 w-full rounded-md border border-[--color-border] bg-white px-3 py-2 text-[13px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:ring-2 focus:ring-[--color-cobalt-soft]"
+						/>
+						<div className="mt-1 text-[10px] text-fg-dim">
+							Must serve <code>/.well-known/agent.json</code>.
+						</div>
+					</div>
+
+					{status === "error" && errMsg && (
+						<div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700">
+							✗ {errMsg}
+						</div>
+					)}
+				</div>
+
+				<div className="flex items-center justify-end gap-2 border-t border-[--color-border-soft] bg-slate-50 px-5 py-3">
+					<button
+						type="button"
+						onClick={onClose}
+						className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						disabled={!canSubmit}
+						className={clsx(
+							"rounded-md px-3 py-1.5 text-[12px] font-medium shadow-sm transition",
+							canSubmit
+								? "bg-[--color-cobalt] text-white hover:bg-[--color-cobalt-strong]"
+								: "bg-slate-200 text-slate-400",
+						)}
+					>
+						{status === "loading" ? "Resolving…" : "Add agent"}
+					</button>
+				</div>
+			</form>
+		</div>
+	);
+}
