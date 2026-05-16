@@ -6,7 +6,6 @@ import {
 	TrayIcon,
 	PaperPlaneTiltIcon,
 	PencilSimpleIcon,
-	GearIcon,
 	ArchiveIcon,
 	FileIcon,
 } from "@phosphor-icons/react";
@@ -53,7 +52,6 @@ const FOLDERS = [
 ] as const;
 
 export function Sidebar() {
-	const agents = useUI((s) => s.agents);
 	const openRegister = useUI((s) => s.openRegister);
 	const openCompose = useUI((s) => s.openCompose);
 	const drafts = useUI((s) => s.drafts);
@@ -166,30 +164,6 @@ export function Sidebar() {
 						);
 					})
 				)}
-			</div>
-
-			{/* Per-agent (debug) — lets devs/auditors inspect one agent's lane */}
-			<div className="mt-5 px-3">
-				<div className="flex items-center gap-1.5 px-3 pb-1.5 text-[10px] uppercase tracking-[0.15em] text-fg-dim">
-					<GearIcon size={11} weight="bold" />
-					Per-agent (debug)
-				</div>
-				{agents.map((a) => (
-					<NavLink
-						key={a.id}
-						to={`/agents/${a.id}`}
-						className={({ isActive }) =>
-							clsx(
-								"flex w-full items-center gap-2.5 rounded-md px-3 py-1 text-left transition",
-								isActive
-									? "bg-[--color-cobalt-soft] text-fg"
-									: "text-fg-muted hover:bg-[--color-row-hover]",
-							)
-						}
-					>
-						<span className="text-[11px]">{a.name}</span>
-					</NavLink>
-				))}
 			</div>
 
 			{/* You + Register-agent footer */}

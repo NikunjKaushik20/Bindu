@@ -98,6 +98,18 @@ function inferOtherParty(t: Thread): string | null {
 	return null;
 }
 
+/**
+ * "Operational" threads are gateway-only conversations — planner plumbing,
+ * not user-facing A2A. We hide them from /inbox and /sent (they're still
+ * reachable via /agents/gateway for ops people).
+ */
+function isOperationalThread(t: Thread): boolean {
+	for (const id of t.agentIds) {
+		if (id !== "gateway") return false;
+	}
+	return true;
+}
+
 export function threadInFolder(
 	t: Thread,
 	folder: "inbox" | "sent" | "archive",
@@ -105,12 +117,12 @@ export function threadInFolder(
 ): boolean {
 	if (archived.has(t.contextId)) return folder === "archive";
 	if (folder === "archive") return false;
+	if (isOperationalThread(t)) return false;
 	if (folder === "sent") return t.origin === "operator";
-	// inbox: surface everything that didn't start from us
-	return t.origin === "other" || t.agentIds.has(OUTBOX_AGENT_ID);
-	// ↑ also surface operator-initiated threads in /inbox once the recipient
-	// has answered, so the user sees the conversation arriving back. Threads
-	// pure outbound with no responses yet stay in /sent only.
+	// inbox: surface everything that didn't start from us, plus operator-
+	// initiated threads that have any recipient activity at all (so the
+	// reply arrives back into Inbox, Gmail-style).
+	return t.origin === "other" || t.agentIds.size > 1;
 }
 
 /**
