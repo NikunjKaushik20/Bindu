@@ -14,8 +14,9 @@ import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
+import { DraftList } from "./DraftList";
 
-type Folder = "inbox" | "sent" | "archive";
+type Folder = "inbox" | "sent" | "drafts" | "archive";
 type Mode = { kind: "folder"; folder: Folder } | { kind: "agent"; agentId: string };
 
 function useMode(): Mode {
@@ -23,6 +24,7 @@ function useMode(): Mode {
 	const params = useParams<{ agentId: string }>();
 	if (loc.pathname === "/sent") return { kind: "folder", folder: "sent" };
 	if (loc.pathname === "/archive") return { kind: "folder", folder: "archive" };
+	if (loc.pathname === "/drafts") return { kind: "folder", folder: "drafts" };
 	if (loc.pathname === "/inbox" || loc.pathname === "/")
 		return { kind: "folder", folder: "inbox" };
 	return { kind: "agent", agentId: params.agentId ?? "writer" };
@@ -60,21 +62,19 @@ export function StreamPanel() {
 		return all;
 	}, [mode, liveEvents]);
 
+	const FOLDER_TITLES: Record<Folder, [string, string]> = {
+		inbox: ["Inbox", "Conversations from your ecosystem"],
+		sent: ["Sent", "Conversations you initiated"],
+		drafts: ["Drafts", "Unsent messages saved locally"],
+		archive: ["Archive", "Threads you set aside"],
+	};
 	const title =
 		mode.kind === "folder"
-			? mode.folder === "sent"
-				? "Sent"
-				: mode.folder === "archive"
-					? "Archive"
-					: "Inbox"
+			? FOLDER_TITLES[mode.folder][0]
 			: agents.find((a) => a.id === mode.agentId)?.name ?? mode.agentId;
 	const subtitle =
 		mode.kind === "folder"
-			? mode.folder === "sent"
-				? "Conversations you initiated"
-				: mode.folder === "archive"
-					? "Threads you set aside"
-					: "Conversations from your ecosystem"
+			? FOLDER_TITLES[mode.folder][1]
 			: shortDid(agents.find((a) => a.id === mode.agentId)?.did ?? "");
 
 	return (
@@ -151,7 +151,9 @@ export function StreamPanel() {
 			</header>
 			{/* MailboxSplitView — list shrinks to 380px when a thread opens,
 			    the thread renders to the right. On mobile the list hides
-			    when a thread is open (the view takes the full width). */}
+			    when a thread is open (the view takes the full width).
+			    Drafts is a list-only folder: clicking a draft opens the
+			    compose modal instead of expanding a thread view. */}
 			<div className="flex min-h-0 flex-1">
 				<div
 					className={clsx(
@@ -162,11 +164,19 @@ export function StreamPanel() {
 					)}
 				>
 					<div className="scrollbar flex-1 overflow-y-auto">
-						<ThreadList
-							events={filteredEvents}
-							mode={mode.kind === "folder" ? mode.folder : "inbox"}
-							query={query}
-						/>
+						{mode.kind === "folder" && mode.folder === "drafts" ? (
+							<DraftList />
+						) : (
+							<ThreadList
+								events={filteredEvents}
+								mode={
+									mode.kind === "folder" && mode.folder !== "drafts"
+										? mode.folder
+										: "inbox"
+								}
+								query={query}
+							/>
+						)}
 					</div>
 				</div>
 				{selectedThreadId && (

@@ -8,6 +8,7 @@ import {
 	PencilSimpleIcon,
 	GearIcon,
 	ArchiveIcon,
+	FileIcon,
 } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
@@ -47,6 +48,7 @@ function useEcosystem() {
 const FOLDERS = [
 	{ to: "/inbox", label: "Inbox", icon: TrayIcon },
 	{ to: "/sent", label: "Sent", icon: PaperPlaneTiltIcon },
+	{ to: "/drafts", label: "Drafts", icon: FileIcon },
 	{ to: "/archive", label: "Archive", icon: ArchiveIcon },
 ] as const;
 
@@ -54,6 +56,7 @@ export function Sidebar() {
 	const agents = useUI((s) => s.agents);
 	const openRegister = useUI((s) => s.openRegister);
 	const openCompose = useUI((s) => s.openCompose);
+	const drafts = useUI((s) => s.drafts);
 	const [showAdd, setShowAdd] = useState(false);
 	const { list: ecosystem, reload: reloadEcosystem } = useEcosystem();
 
@@ -104,6 +107,11 @@ export function Sidebar() {
 					>
 						<f.icon size={16} weight="duotone" />
 						<span className="flex-1">{f.label}</span>
+						{f.to === "/drafts" && drafts.length > 0 && (
+							<span className="rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-700">
+								{drafts.length}
+							</span>
+						)}
 					</NavLink>
 				))}
 			</nav>

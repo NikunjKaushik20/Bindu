@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import clsx from "clsx";
-import { XIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
+import {
+	XIcon,
+	PaperPlaneTiltIcon,
+	TrashIcon,
+} from "@phosphor-icons/react";
 import { shortDid } from "~/lib/format";
+import { useUI } from "~/state";
 
 interface EcosystemAgent {
 	id: string;
@@ -18,28 +23,46 @@ interface Props {
 
 export function ComposeModal({ open, onClose }: Props) {
 	const navigate = useNavigate();
+	const composeDraftId = useUI((s) => s.composeDraftId);
+	const drafts = useUI((s) => s.drafts);
+	const saveDraft = useUI((s) => s.saveDraft);
+	const deleteDraft = useUI((s) => s.deleteDraft);
+
 	const [agents, setAgents] = useState<EcosystemAgent[]>([]);
 	const [agentId, setAgentId] = useState("");
 	const [text, setText] = useState("");
 	const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
 	const [errMsg, setErrMsg] = useState<string | null>(null);
+	// Local draft id — generated when this compose session creates a draft.
+	const [draftId, setDraftId] = useState<string | null>(null);
+	const sentRef = useRef(false);
 
+	// Load ecosystem and seed defaults / hydrate from a draft.
 	useEffect(() => {
 		if (!open) return;
-		setText("");
 		setStatus("idle");
 		setErrMsg(null);
+		sentRef.current = false;
+
+		const draftToLoad = composeDraftId
+			? drafts.find((d) => d.id === composeDraftId)
+			: null;
+		setDraftId(draftToLoad?.id ?? null);
+		setText(draftToLoad?.text ?? "");
+
 		fetch("/api/ecosystem")
 			.then((r) => (r.ok ? r.json() : []))
 			.then((j: EcosystemAgent[]) => {
-				// Exclude the synthetic outbox bucket — you don't send TO your own outbox.
 				const filtered = j.filter((a) => a.id !== "outbox");
 				setAgents(filtered);
-				if (!agentId && filtered[0]) setAgentId(filtered[0].id);
+				if (draftToLoad?.agentId) {
+					setAgentId(draftToLoad.agentId);
+				} else if (filtered[0]) {
+					setAgentId(filtered[0].id);
+				}
 			})
 			.catch(() => {});
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open]);
+	}, [open, composeDraftId, drafts]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -50,10 +73,40 @@ export function ComposeModal({ open, onClose }: Props) {
 		return () => window.removeEventListener("keydown", onKey);
 	}, [open, onClose]);
 
-	if (!open) return null;
+	// Auto-save on close (unless we just sent it).
+	const saveOnClose = () => {
+		if (sentRef.current) return;
+		const trimmed = text.trim();
+		if (!trimmed || !agentId) {
+			// Empty close: drop the draft if we were editing one.
+			if (draftId) deleteDraft(draftId);
+			return;
+		}
+		const id = draftId ?? crypto.randomUUID();
+		saveDraft({
+			id,
+			agentId,
+			text: trimmed,
+			savedAt: new Date().toISOString(),
+		});
+	};
 
-	const canSubmit =
-		agentId.length > 0 && text.trim().length > 0 && status !== "sending";
+	function handleCloseClick() {
+		saveOnClose();
+		onClose();
+	}
+
+	function handleDiscard() {
+		if (draftId) deleteDraft(draftId);
+		sentRef.current = true; // skip save-on-close
+		onClose();
+	}
+
+	const canSubmit = useMemo(
+		() =>
+			agentId.length > 0 && text.trim().length > 0 && status !== "sending",
+		[agentId, text, status],
+	);
 
 	async function handleSubmit(e: React.FormEvent) {
 		e.preventDefault();
@@ -76,7 +129,10 @@ export function ComposeModal({ open, onClose }: Props) {
 				setErrMsg(j.detail ?? j.error ?? `HTTP ${r.status}`);
 				return;
 			}
-			navigate("/agents/outbox");
+			// Successful send — clear any draft we were editing.
+			if (draftId) deleteDraft(draftId);
+			sentRef.current = true;
+			navigate("/sent");
 			onClose();
 		} catch (err) {
 			setStatus("error");
@@ -84,10 +140,12 @@ export function ComposeModal({ open, onClose }: Props) {
 		}
 	}
 
+	if (!open) return null;
+
 	return (
 		<div
 			className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
-			onClick={onClose}
+			onClick={handleCloseClick}
 		>
 			<form
 				onSubmit={handleSubmit}
@@ -101,14 +159,16 @@ export function ComposeModal({ open, onClose }: Props) {
 						className="text-[--color-cobalt]"
 					/>
 					<div className="flex-1">
-						<h2 className="text-[14px] font-medium text-fg">New request</h2>
+						<h2 className="text-[14px] font-medium text-fg">
+							{draftId ? "Resume draft" : "New request"}
+						</h2>
 						<div className="text-[10px] text-fg-dim">
 							Send a message to an agent in your ecosystem. From: your operator DID.
 						</div>
 					</div>
 					<button
 						type="button"
-						onClick={onClose}
+						onClick={handleCloseClick}
 						className="rounded p-1 text-fg-dim transition hover:bg-slate-100 hover:text-fg"
 					>
 						<XIcon size={14} weight="bold" />
@@ -156,6 +216,9 @@ export function ComposeModal({ open, onClose }: Props) {
 							rows={5}
 							className="mt-1.5 w-full resize-y rounded-md border border-[--color-border] bg-white px-3 py-2 text-[13px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:ring-2 focus:ring-[--color-cobalt-soft]"
 						/>
+						<div className="mt-1 text-[10px] text-fg-dim">
+							Closing without sending saves a draft.
+						</div>
 					</div>
 
 					{status === "error" && errMsg && (
@@ -165,26 +228,40 @@ export function ComposeModal({ open, onClose }: Props) {
 					)}
 				</div>
 
-				<div className="flex items-center justify-end gap-2 border-t border-[--color-border-soft] bg-slate-50 px-5 py-3">
-					<button
-						type="button"
-						onClick={onClose}
-						className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
-					>
-						Cancel
-					</button>
-					<button
-						type="submit"
-						disabled={!canSubmit || agents.length === 0}
-						className={clsx(
-							"rounded-md px-3 py-1.5 text-[12px] font-medium shadow-sm transition",
-							canSubmit && agents.length > 0
-								? "bg-[--color-cobalt] text-white hover:bg-[--color-cobalt-strong]"
-								: "bg-slate-200 text-slate-400",
-						)}
-					>
-						{status === "sending" ? "Sending…" : "Send request"}
-					</button>
+				<div className="flex items-center justify-between gap-2 border-t border-[--color-border-soft] bg-slate-50 px-5 py-3">
+					{draftId ? (
+						<button
+							type="button"
+							onClick={handleDiscard}
+							className="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-rose-700 transition hover:border-rose-300 hover:bg-rose-50"
+						>
+							<TrashIcon size={11} weight="bold" />
+							Discard draft
+						</button>
+					) : (
+						<span />
+					)}
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							onClick={handleCloseClick}
+							className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+						>
+							{text.trim() ? "Save & close" : "Cancel"}
+						</button>
+						<button
+							type="submit"
+							disabled={!canSubmit || agents.length === 0}
+							className={clsx(
+								"rounded-md px-3 py-1.5 text-[12px] font-medium shadow-sm transition",
+								canSubmit && agents.length > 0
+									? "bg-[--color-cobalt] text-white hover:bg-[--color-cobalt-strong]"
+									: "bg-slate-200 text-slate-400",
+							)}
+						>
+							{status === "sending" ? "Sending…" : "Send request"}
+						</button>
+					</div>
 				</div>
 			</form>
 		</div>

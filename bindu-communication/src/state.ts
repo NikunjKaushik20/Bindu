@@ -14,6 +14,14 @@ export interface NewAgentDraft {
 	trustPolicy: TrustPolicy;
 }
 
+export interface Draft {
+	id: string;
+	agentId: string;
+	text: string;
+	contextId?: string;
+	savedAt: string;
+}
+
 interface UIState {
 	selectedEventId: string | null;
 	selectedThreadId: string | null;
@@ -31,6 +39,7 @@ interface UIState {
 	unreadOverrides: Set<string>;
 	/** ctx ids the user has archived (hidden from inbox/sent, visible in archive folder) */
 	archivedThreads: Set<string>;
+	drafts: Draft[];
 
 	selectEvent: (id: string | null) => void;
 	selectThread: (contextId: string | null) => void;
@@ -48,11 +57,16 @@ interface UIState {
 	markUnread: (contextId: string) => void;
 	archiveThread: (contextId: string) => void;
 	unarchiveThread: (contextId: string) => void;
+	saveDraft: (draft: Draft) => void;
+	deleteDraft: (id: string) => void;
+	composeDraftId: string | null;
+	openComposeWith: (draftId: string | null) => void;
 }
 
 const READ_LS_KEY = "bindu-comms:read-overrides";
 const UNREAD_LS_KEY = "bindu-comms:unread-overrides";
 const ARCHIVE_LS_KEY = "bindu-comms:archived-threads";
+const DRAFTS_LS_KEY = "bindu-comms:drafts";
 
 function loadSet(key: string): Set<string> {
 	if (typeof window === "undefined") return new Set();
@@ -76,6 +90,34 @@ function saveSet(key: string, s: Set<string>): void {
 	}
 }
 
+function loadDrafts(): Draft[] {
+	if (typeof window === "undefined") return [];
+	try {
+		const raw = window.localStorage.getItem(DRAFTS_LS_KEY);
+		if (!raw) return [];
+		const arr = JSON.parse(raw) as unknown;
+		if (!Array.isArray(arr)) return [];
+		return arr.filter(
+			(d): d is Draft =>
+				!!d &&
+				typeof (d as Draft).id === "string" &&
+				typeof (d as Draft).agentId === "string" &&
+				typeof (d as Draft).text === "string",
+		);
+	} catch {
+		return [];
+	}
+}
+
+function saveDrafts(drafts: Draft[]): void {
+	if (typeof window === "undefined") return;
+	try {
+		window.localStorage.setItem(DRAFTS_LS_KEY, JSON.stringify(drafts));
+	} catch {
+		// no-op
+	}
+}
+
 export const useUI = create<UIState>((set) => ({
 	selectedEventId: "wa-7",
 	selectedThreadId: null,
@@ -90,6 +132,8 @@ export const useUI = create<UIState>((set) => ({
 	readOverrides: loadSet(READ_LS_KEY),
 	unreadOverrides: loadSet(UNREAD_LS_KEY),
 	archivedThreads: loadSet(ARCHIVE_LS_KEY),
+	drafts: loadDrafts(),
+	composeDraftId: null,
 
 	selectEvent: (id) => set({ selectedEventId: id }),
 	selectThread: (contextId) =>
@@ -121,8 +165,22 @@ export const useUI = create<UIState>((set) => ({
 		set((s) => ({ scopeFilter: s.scopeFilter === id ? null : id })),
 	openRegister: () => set({ showRegister: true }),
 	closeRegister: () => set({ showRegister: false }),
-	openCompose: () => set({ showCompose: true }),
-	closeCompose: () => set({ showCompose: false }),
+	openCompose: () => set({ showCompose: true, composeDraftId: null }),
+	closeCompose: () => set({ showCompose: false, composeDraftId: null }),
+	openComposeWith: (draftId) =>
+		set({ showCompose: true, composeDraftId: draftId }),
+	saveDraft: (draft) =>
+		set((s) => {
+			const next = [draft, ...s.drafts.filter((d) => d.id !== draft.id)];
+			saveDrafts(next);
+			return { drafts: next };
+		}),
+	deleteDraft: (id) =>
+		set((s) => {
+			const next = s.drafts.filter((d) => d.id !== id);
+			saveDrafts(next);
+			return { drafts: next };
+		}),
 	registerAgent: (draft) => {
 		const id = draft.name
 			.toLowerCase()

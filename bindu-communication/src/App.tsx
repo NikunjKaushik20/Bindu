@@ -71,6 +71,7 @@ export default function App() {
 				<Route path="/inbox" element={<Shell />} />
 				<Route path="/sent" element={<Shell />} />
 				<Route path="/archive" element={<Shell />} />
+				<Route path="/drafts" element={<Shell />} />
 				<Route path="/agents/:agentId" element={<Shell />} />
 			</Routes>
 		</BrowserRouter>
