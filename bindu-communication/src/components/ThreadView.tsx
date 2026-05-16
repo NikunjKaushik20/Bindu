@@ -1,26 +1,25 @@
-import { ArrowLeftIcon } from "@phosphor-icons/react";
+import { useMemo, useState } from "react";
+import clsx from "clsx";
+import { ArrowLeftIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { eventsInThread, shortContextId } from "~/lib/threads";
 import { EventRow } from "./EventRow";
 import { events as mockEvents } from "~/data/mock";
+import type { StreamEvent } from "~/types";
 
 interface Props {
 	contextId: string;
 }
 
+const OUTBOX_AGENT_ID = "outbox";
+
 /**
- * One thread's events, oldest → newest. Reuses EventRow for each entry.
+ * One thread's events, oldest → newest. Spans all agents (live + mock)
+ * so the user sees one conversation instead of two half-conversations
+ * across lanes (Step 3 stitching).
  *
- * Crucially the event source spans ALL agents (live + mock), not just the
- * agent whose lane the user is currently viewing. An A2A conversation
- * lives on a context_id; the operator-side outbound message and the
- * recipient agent's lifecycle responses share that context_id but land on
- * different agentIds (outbox vs the recipient). Stitching them here gives
- * the user one Gmail-style conversation instead of two half-conversations
- * sitting in separate lanes.
- *
- * The lane list stays per-agent — that's the inbox; the thread view is
- * the conversation.
+ * The composer at the bottom posts a reply on the existing context_id,
+ * so the conversation extends instead of forking a new thread.
  */
 export function ThreadView({ contextId }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
@@ -29,6 +28,13 @@ export function ThreadView({ contextId }: Props) {
 	const first = ordered[0];
 	const counterpartyName = first?.counterparty.name ?? "—";
 	const agentLanes = Array.from(new Set(ordered.map((e) => e.agentId)));
+
+	// Derive the target agent for the reply: prefer the recipient declared
+	// on an outbound event (operator-canonical), else the first non-outbox
+	// lane (the agent processing this context). Mock-data threads have no
+	// outbound + no non-outbox lane events to draw from — replies stay
+	// disabled in that case.
+	const replyTarget = useMemo(() => deriveReplyTarget(ordered), [ordered]);
 
 	return (
 		<>
@@ -80,6 +86,126 @@ export function ThreadView({ contextId }: Props) {
 					))
 				)}
 			</div>
+
+			<ReplyBox contextId={contextId} target={replyTarget} />
 		</>
+	);
+}
+
+function deriveReplyTarget(events: StreamEvent[]): string | null {
+	// First preference: an outbound event with to_agent_id field.
+	for (const e of events) {
+		if (e.agentId !== OUTBOX_AGENT_ID || !e.payload) continue;
+		try {
+			const p = JSON.parse(e.payload) as { to_agent_id?: string };
+			if (typeof p.to_agent_id === "string" && p.to_agent_id.length > 0) {
+				return p.to_agent_id;
+			}
+		} catch {
+			// no-op
+		}
+	}
+	// Fallback: the first non-outbox lane is the agent processing this thread.
+	for (const e of events) {
+		if (e.agentId !== OUTBOX_AGENT_ID) return e.agentId;
+	}
+	return null;
+}
+
+function ReplyBox({
+	contextId,
+	target,
+}: {
+	contextId: string;
+	target: string | null;
+}) {
+	const [text, setText] = useState("");
+	const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
+	const [errMsg, setErrMsg] = useState<string | null>(null);
+
+	if (!target) {
+		return (
+			<div className="border-t border-[--color-border-soft] bg-slate-50 px-6 py-3 text-[11px] text-fg-dim">
+				Replies aren't available for this thread (no agent target identified).
+			</div>
+		);
+	}
+
+	const canSubmit = text.trim().length > 0 && status !== "sending";
+
+	async function handleSend(e: React.FormEvent) {
+		e.preventDefault();
+		if (!canSubmit) return;
+		setStatus("sending");
+		setErrMsg(null);
+		try {
+			const r = await fetch("/api/compose", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					agentId: target,
+					text: text.trim(),
+					contextId,
+				}),
+			});
+			const j = (await r.json().catch(() => ({}))) as {
+				ok?: boolean;
+				error?: string;
+				detail?: string;
+			};
+			if (!r.ok || j.ok === false) {
+				setStatus("error");
+				setErrMsg(j.detail ?? j.error ?? `HTTP ${r.status}`);
+				return;
+			}
+			setText("");
+			setStatus("idle");
+		} catch (err) {
+			setStatus("error");
+			setErrMsg((err as Error).message);
+		}
+	}
+
+	return (
+		<form
+			onSubmit={handleSend}
+			className="border-t border-[--color-border-soft] bg-white px-6 py-3"
+		>
+			<div className="mb-1.5 flex items-center justify-between text-[10px] text-fg-dim">
+				<span>
+					Replying to <span className="text-fg-muted">{target}</span> on this thread
+				</span>
+				{status === "error" && errMsg && (
+					<span className="text-rose-700">✗ {errMsg}</span>
+				)}
+			</div>
+			<div className="flex items-end gap-2">
+				<textarea
+					value={text}
+					onChange={(e) => setText(e.target.value)}
+					onKeyDown={(e) => {
+						if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+							handleSend(e as unknown as React.FormEvent);
+						}
+					}}
+					placeholder="Type a reply… (⌘↩ to send)"
+					rows={2}
+					className="flex-1 resize-none rounded-md border border-[--color-border] bg-white px-3 py-2 text-[13px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:ring-2 focus:ring-[--color-cobalt-soft]"
+				/>
+				<button
+					type="submit"
+					disabled={!canSubmit}
+					className={clsx(
+						"flex items-center gap-1.5 rounded-md px-3 py-2 text-[12px] font-medium shadow-sm transition",
+						canSubmit
+							? "bg-[--color-cobalt] text-white hover:bg-[--color-cobalt-strong]"
+							: "bg-slate-200 text-slate-400",
+					)}
+				>
+					<PaperPlaneTiltIcon size={12} weight="fill" />
+					{status === "sending" ? "Sending…" : "Send"}
+				</button>
+			</div>
+		</form>
 	);
 }
