@@ -1,11 +1,25 @@
 import type { StreamEvent } from "~/types";
 
+const OUTBOX_AGENT_ID = "outbox";
+
+export type ThreadOrigin = "operator" | "other";
+
 export interface Thread {
 	contextId: string;
 	latest: StreamEvent;
+	earliest: StreamEvent;
 	totalCount: number;
 	attentionCount: number;
 	latestTs: string;
+	earliestTs: string;
+	/** Set of distinct agentIds participating in this thread. */
+	agentIds: Set<string>;
+	/** "operator" = first event was outbound; "other" = first event came in from an agent. */
+	origin: ThreadOrigin;
+	/** The other party of the conversation, agent-side. For operator-initiated
+	 * threads this is the recipient (to_agent_id from the outbound message);
+	 * for other-initiated threads it's the first non-outbox agentId. */
+	otherPartyAgentId: string | null;
 }
 
 /**
@@ -28,18 +42,33 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 			byCtx.set(ctx, {
 				contextId: ctx,
 				latest: e,
+				earliest: e,
 				totalCount: 1,
 				attentionCount: e.needsAttention ? 1 : 0,
 				latestTs: e.ts,
+				earliestTs: e.ts,
+				agentIds: new Set([e.agentId]),
+				origin: "operator",
+				otherPartyAgentId: null,
 			});
 			continue;
 		}
 		existing.totalCount += 1;
 		if (e.needsAttention) existing.attentionCount += 1;
+		existing.agentIds.add(e.agentId);
 		if (e.ts > existing.latestTs) {
 			existing.latest = e;
 			existing.latestTs = e.ts;
 		}
+		if (e.ts < existing.earliestTs) {
+			existing.earliest = e;
+			existing.earliestTs = e.ts;
+		}
+	}
+	// Second pass: derive origin + otherPartyAgentId from the assembled thread.
+	for (const t of byCtx.values()) {
+		t.origin = t.earliest.agentId === OUTBOX_AGENT_ID ? "operator" : "other";
+		t.otherPartyAgentId = inferOtherParty(t);
 	}
 	return Array.from(byCtx.values()).sort((a, b) => {
 		// Attention threads pinned to top, then by latest timestamp DESC.
@@ -48,6 +77,40 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 		if (a1 !== b1) return b1 - a1;
 		return b.latestTs.localeCompare(a.latestTs);
 	});
+}
+
+function inferOtherParty(t: Thread): string | null {
+	// Operator-initiated: pick the recipient declared on the outbound event.
+	if (t.origin === "operator" && t.earliest.payload) {
+		try {
+			const p = JSON.parse(t.earliest.payload) as { to_agent_id?: string };
+			if (typeof p.to_agent_id === "string" && p.to_agent_id.length > 0) {
+				return p.to_agent_id;
+			}
+		} catch {
+			// no-op
+		}
+	}
+	// Other-initiated: pick the first non-outbox lane.
+	for (const id of t.agentIds) {
+		if (id !== OUTBOX_AGENT_ID) return id;
+	}
+	return null;
+}
+
+export function threadInFolder(
+	t: Thread,
+	folder: "inbox" | "sent" | "archive",
+	archived: Set<string>,
+): boolean {
+	if (archived.has(t.contextId)) return folder === "archive";
+	if (folder === "archive") return false;
+	if (folder === "sent") return t.origin === "operator";
+	// inbox: surface everything that didn't start from us
+	return t.origin === "other" || t.agentIds.has(OUTBOX_AGENT_ID);
+	// ↑ also surface operator-initiated threads in /inbox once the recipient
+	// has answered, so the user sees the conversation arriving back. Threads
+	// pure outbound with no responses yet stay in /sent only.
 }
 
 /**

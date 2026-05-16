@@ -12,14 +12,11 @@ import {
 import { events as mockEvents } from "~/data/mock";
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
-import { extractContextId } from "~/lib/threads";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
 
 type Folder = "inbox" | "sent" | "archive";
 type Mode = { kind: "folder"; folder: Folder } | { kind: "agent"; agentId: string };
-
-const OUTBOX_AGENT_ID = "outbox";
 
 function useMode(): Mode {
 	const loc = useLocation();
@@ -40,7 +37,6 @@ export function StreamPanel() {
 	const selectedThreadId = useUI((s) => s.selectedThreadId);
 	const selectThread = useUI((s) => s.selectThread);
 	const openCompose = useUI((s) => s.openCompose);
-	const archivedThreads = useUI((s) => s.archivedThreads);
 	const [query, setQuery] = useState("");
 
 	// Clear the open thread + search when the user switches folder / agent —
@@ -51,24 +47,18 @@ export function StreamPanel() {
 		setQuery("");
 	}, [modeKey, selectThread]);
 
+	// For folder modes we hand ALL events to ThreadList so threads can be
+	// grouped across both lanes (outbox + recipient agent) and the sender
+	// label can be derived from the originating event. The folder filter
+	// is then applied at the THREAD level inside ThreadList. The agent
+	// debug mode keeps the legacy per-lane filter.
 	const filteredEvents = useMemo(() => {
 		const all = [...liveEvents, ...mockEvents];
-		const isArchived = (e: (typeof all)[number]) => {
-			const ctx = extractContextId(e);
-			return ctx ? archivedThreads.has(ctx) : false;
-		};
 		if (mode.kind === "agent") {
 			return all.filter((e) => e.agentId === mode.agentId);
 		}
-		if (mode.folder === "archive") {
-			return all.filter(isArchived);
-		}
-		if (mode.folder === "sent") {
-			return all.filter((e) => e.agentId === OUTBOX_AGENT_ID && !isArchived(e));
-		}
-		// inbox = everything except outbound + not archived
-		return all.filter((e) => e.agentId !== OUTBOX_AGENT_ID && !isArchived(e));
-	}, [mode, liveEvents, archivedThreads]);
+		return all;
+	}, [mode, liveEvents]);
 
 	const title =
 		mode.kind === "folder"

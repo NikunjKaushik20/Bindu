@@ -11,6 +11,7 @@ import { useUI } from "~/state";
 import {
 	groupByThread,
 	shortContextId,
+	threadInFolder,
 	type Thread,
 } from "~/lib/threads";
 import type { StreamEvent } from "~/types";
@@ -43,8 +44,6 @@ function matchesQuery(t: Thread, q: string): boolean {
 	return false;
 }
 
-const OUTBOX_AGENT_ID = "outbox";
-
 /**
  * Gmail-shape thread list. Each row mirrors the agentic-inbox layout:
  *
@@ -64,10 +63,15 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 	const markUnread = useUI((s) => s.markUnread);
 	const archiveThread = useUI((s) => s.archiveThread);
 	const unarchiveThread = useUI((s) => s.unarchiveThread);
-	const allThreads = groupByThread(events);
+	const archivedThreads = useUI((s) => s.archivedThreads);
+	const grouped = groupByThread(events);
+	const folderScoped =
+		mode === "inbox" || mode === "sent" || mode === "archive"
+			? grouped.filter((t) => threadInFolder(t, mode, archivedThreads))
+			: grouped;
 	const threads = query
-		? allThreads.filter((t) => matchesQuery(t, query))
-		: allThreads;
+		? folderScoped.filter((t) => matchesQuery(t, query))
+		: folderScoped;
 
 	function isUnread(t: Thread): boolean {
 		if (unreadOverrides.has(t.contextId)) return true;
@@ -76,7 +80,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 	}
 
 	if (threads.length === 0) {
-		const isFiltered = !!query && allThreads.length > 0;
+		const isFiltered = !!query && folderScoped.length > 0;
 		return (
 			<div className="flex flex-col items-center justify-center px-6 py-24 text-center">
 				<TrayIcon size={48} weight="thin" className="mb-4 text-fg-dim" />
@@ -137,15 +141,14 @@ function ThreadRow({
 }) {
 	const e = thread.latest;
 	const isUnread = unread;
-	const isOutbound = e.agentId === OUTBOX_AGENT_ID;
 
-	// Sender / recipient label: in /inbox we show "From: name"; in /sent
-	// the latest event is outbound so we show "To: name".
-	const counterpartyName =
-		e.counterparty.name === "task"
-			? shortContextId(thread.contextId)
-			: e.counterparty.name;
-	const fromLabel = isOutbound ? `To: ${counterpartyName}` : counterpartyName;
+	// Sender label is thread-origin-driven, not latest-event-driven, so an
+	// inbound lifecycle row doesn't render as "Thread <ctx>" just because
+	// the recipient agent's webhook didn't carry a name.
+	const otherParty =
+		thread.otherPartyAgentId ?? (e.counterparty.name !== "task" ? e.counterparty.name : null);
+	const labelTarget = otherParty ?? shortContextId(thread.contextId);
+	const fromLabel = thread.origin === "operator" ? `To: ${labelTarget}` : labelTarget;
 
 	// Subject = first message's text if we know it (outbound has text on
 	// the payload), otherwise the latest summary. Snippet = latest summary.
