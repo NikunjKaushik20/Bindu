@@ -42,11 +42,33 @@ body,
 	font-feature-settings: "ss01", "cv11";
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+	/* Pin the page to light mode so <input>/<textarea> don't pick up
+	   the OS's dark form defaults (white text on field background).
+	   This was making the Compose body and Add-agent URL fields render
+	   typed text invisibly on macOS Chrome with dark mode enabled. */
+	color-scheme: light;
 }
 
 body {
 	background-color: var(--color-panel);
 	color: var(--color-fg);
+}
+
+/* Force-dark text in every form control. Compose body + Add-agent URL
+   were rendering invisible/gray on macOS due to Tailwind v4 dropping
+   the bare `[--var]` arbitrary-value syntax. We pin the color at the
+   base layer in the strongest possible way so the modal inputs stay
+   readable even if a future class change reintroduces the bug.
+   `!important` is intentional — these are operator-input fields and
+   nothing should override their legibility. */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+	color: #000 !important;
+}
+input::placeholder,
+textarea::placeholder {
+	color: #94a3b8;
 }
 
 /* Subtle scrollbar */

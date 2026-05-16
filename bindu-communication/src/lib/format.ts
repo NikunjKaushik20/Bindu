@@ -15,11 +15,17 @@ export function shortDid(did: string, tailChars = 6): string {
 /** Normalise a free-form name into a URL/agent-id-safe slug.
  *
  * Used wherever the UI mints an id from a human-readable name. Falls
- * back to a short random id when the input slugs to empty. */
+ * back to a short random id when the input slugs to empty.
+ *
+ * We preserve underscores because agno-style agent names (joke_agent,
+ * math_agent, bindu_docs_agent) arrive on the webhook path verbatim —
+ * `POST /webhooks/bindu/joke_agent` — so if the manual-add slug
+ * collapsed them to `joke-agent` we'd end up with two Contacts rows
+ * for the same agent the moment a webhook fires. */
 export function slugify(name: string, fallbackPrefix = "agent"): string {
 	const slug = name
 		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/[^a-z0-9_]+/g, "-")
 		.replace(/(^-|-$)/g, "");
 	return slug || `${fallbackPrefix}-${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -36,9 +42,9 @@ export const trustMeta: Record<
 	},
 	trusted: {
 		label: "trusted",
-		color: "text-emerald-700",
-		bg: "bg-emerald-50",
-		border: "border-emerald-200",
+		color: "text-(--color-cobalt)",
+		bg: "bg-(--color-cobalt-soft)",
+		border: "border-(--color-cobalt-soft)",
 	},
 	known: {
 		label: "known",
@@ -95,9 +101,9 @@ export const stateMeta: Record<
 		border: "border-yellow-400",
 	},
 	completed: {
-		color: "text-emerald-700",
-		bg: "bg-emerald-50",
-		border: "border-emerald-200",
+		color: "text-(--color-cobalt)",
+		bg: "bg-(--color-cobalt-soft)",
+		border: "border-(--color-cobalt-soft)",
 	},
 	failed: {
 		color: "text-rose-700",

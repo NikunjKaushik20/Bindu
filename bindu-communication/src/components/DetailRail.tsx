@@ -37,7 +37,7 @@ export function DetailRail() {
 
 	if (!event) {
 		return (
-			<aside className="flex w-[400px] shrink-0 flex-col border-l border-[--color-border-soft] bg-[--color-rail]">
+			<aside className="flex w-[400px] shrink-0 flex-col border-l border-(--color-border-soft) bg-(--color-rail)">
 				<div className="flex flex-1 items-center justify-center p-6 text-center text-[12px] text-fg-dim">
 					Select an event to inspect it
 				</div>
@@ -49,9 +49,9 @@ export function DetailRail() {
 	const sb = event.state ? stateMeta[event.state] : null;
 
 	return (
-		<aside className="flex w-[400px] shrink-0 flex-col border-l border-[--color-border-soft] bg-[--color-rail]">
+		<aside className="flex w-[400px] shrink-0 flex-col border-l border-(--color-border-soft) bg-(--color-rail)">
 			{/* Summary header */}
-			<div className="border-b border-[--color-border-soft] px-5 py-4">
+			<div className="border-b border-(--color-border-soft) px-5 py-4">
 				<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.15em] text-fg-dim">
 					<span>{event.kind}</span>
 					<span>·</span>
@@ -84,13 +84,13 @@ export function DetailRail() {
 						</span>
 					)}
 					{event.signed && (
-						<span className="text-[10px] text-emerald-600">✓ signed</span>
+						<span className="text-[10px] text-(--color-cobalt)">✓ signed</span>
 					)}
 				</div>
 			</div>
 
 			{/* Tabs */}
-			<div className="flex border-b border-[--color-border-soft]">
+			<div className="flex border-b border-(--color-border-soft)">
 				{TABS.map((t) => (
 					<button
 						key={t.k}
@@ -99,7 +99,7 @@ export function DetailRail() {
 						className={clsx(
 							"flex flex-1 flex-col items-center border-b-2 px-4 py-2 transition",
 							detailTab === t.k
-								? "border-[--color-cobalt] text-fg"
+								? "border-(--color-cobalt) text-fg"
 								: "border-transparent text-fg-dim hover:text-fg-muted",
 						)}
 					>
@@ -171,7 +171,7 @@ function VerifyBody() {
 			<VerifyRow label="Event nonce" value={event.verify.nonce} ok mono />
 			<VerifyRow label="Timestamp" value={event.ts} ok mono />
 
-			<div className="mt-4 rounded-md border border-[--color-border-soft] bg-slate-50 p-3">
+			<div className="mt-4 rounded-md border border-(--color-border-soft) bg-slate-50 p-3">
 				<div className="text-[10px] uppercase tracking-[0.15em] text-fg-dim">
 					Resolved DID document
 				</div>
@@ -195,7 +195,7 @@ function InspectBody() {
 	return (
 		<div className="space-y-4">
 			<Section label="Raw JSON-RPC">
-				<pre className="mt-1 overflow-x-auto rounded-md border border-[--color-border-soft] bg-slate-900 p-3 text-[10px] text-slate-100">
+				<pre className="mt-1 overflow-x-auto rounded-md border border-(--color-border-soft) bg-slate-900 p-3 text-[10px] text-slate-100">
 					{event.payload ?? "(no payload captured)"}
 				</pre>
 			</Section>
@@ -265,7 +265,7 @@ function ActionPanel({
 					type="button"
 					disabled={status === "sending" || (actionKind === "input" && !text.trim())}
 					onClick={() => send(actionKind, actionKind === "input" ? { text } : undefined)}
-					className="rounded-md bg-[--color-sunflower] px-3 py-1.5 text-[12px] font-medium text-yellow-900 transition hover:bg-[--color-sunflower-strong] disabled:opacity-50"
+					className="rounded-md bg-(--color-sunflower) px-3 py-1.5 text-[12px] font-medium text-yellow-900 transition hover:bg-(--color-sunflower-strong) disabled:opacity-50"
 				>
 					{status === "sending" ? "Sending…" : actionLabel}
 				</button>
@@ -273,13 +273,13 @@ function ActionPanel({
 					type="button"
 					disabled={status === "sending"}
 					onClick={() => send("decline")}
-					className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+					className="rounded-md border border-(--color-border) bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 				>
 					Decline
 				</button>
 			</div>
 			{status === "delivered" && (
-				<div className="mt-2 text-[10px] text-emerald-700">
+				<div className="mt-2 text-[10px] text-(--color-cobalt)">
 					✓ delivered to agent
 				</div>
 			)}
@@ -320,7 +320,7 @@ function VerifyRow({
 	neutralWhenFalse?: boolean;
 }) {
 	return (
-		<div className="flex items-start justify-between gap-3 border-b border-[--color-border-soft] py-2">
+		<div className="flex items-start justify-between gap-3 border-b border-(--color-border-soft) py-2">
 			<span className="text-[10px] uppercase tracking-[0.15em] text-fg-dim">
 				{label}
 			</span>
@@ -329,7 +329,7 @@ function VerifyRow({
 					"text-right text-[11px]",
 					mono && "font-mono",
 					ok
-						? "text-emerald-700"
+						? "text-(--color-cobalt)"
 						: neutralWhenFalse
 							? "text-fg-muted"
 							: "text-rose-700",

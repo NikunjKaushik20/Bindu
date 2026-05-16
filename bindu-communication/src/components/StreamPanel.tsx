@@ -7,12 +7,21 @@ import {
 	XIcon,
 	ShieldCheckIcon,
 	ArrowsClockwiseIcon,
+	CopyIcon,
+	CheckIcon,
 } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { useAllEvents } from "~/lib/hooks";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
 import { DraftList } from "./DraftList";
+import {
+	extractContextId,
+	groupByThread,
+	shortContextId,
+	threadInFolder,
+} from "~/lib/threads";
+import type { StreamEvent } from "~/types";
 
 function DetailRailToggle() {
 	const showDetailRail = useUI((s) => s.showDetailRail);
@@ -25,12 +34,159 @@ function DetailRailToggle() {
 			className={clsx(
 				"flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-[11px] transition",
 				showDetailRail
-					? "border-[--color-cobalt] text-[--color-cobalt]"
-					: "border-[--color-border] text-fg-muted hover:border-[--color-cobalt] hover:text-[--color-cobalt]",
+					? "border-(--color-cobalt) text-(--color-cobalt)"
+					: "border-(--color-border) text-fg-muted hover:border-(--color-cobalt) hover:text-(--color-cobalt)",
 			)}
 		>
 			<ShieldCheckIcon size={11} weight="bold" />
 			Verify
+		</button>
+	);
+}
+
+/** Build a structured text dump of the current view, suitable for
+ * pasting into a chat / issue. Two shapes:
+ *
+ *   - Thread open → full event log of that thread (most useful for
+ *     "look at what this conversation did" share)
+ *   - Folder view → one-line summary per thread, scoped to the
+ *     current folder + search query
+ *
+ * Plain text, not JSON, so a human reading the paste can scan it
+ * without needing a pretty-printer. */
+function buildViewDump(opts: {
+	events: StreamEvent[];
+	folderLabel: string;
+	folder: "inbox" | "sent" | "archive" | null;
+	query: string;
+	selectedThreadId: string | null;
+	archivedThreads: Set<string>;
+}): string {
+	const { events, folderLabel, folder, query, selectedThreadId, archivedThreads } =
+		opts;
+	const lines: string[] = [];
+	lines.push(`# Bindu Inbox · ${folderLabel}`);
+	if (query) lines.push(`search: "${query}"`);
+	lines.push("");
+
+	if (selectedThreadId) {
+		const threadEvents = events
+			.filter((e) => extractContextId(e) === selectedThreadId)
+			.sort((a, b) => (a.at ?? a.ts).localeCompare(b.at ?? b.ts));
+		lines.push(`## thread ${shortContextId(selectedThreadId)}  (full id: ${selectedThreadId})`);
+		lines.push(`${threadEvents.length} events`);
+		lines.push("");
+		for (const e of threadEvents) {
+			const state = e.state ? ` ${e.state}` : "";
+			const cp =
+				e.counterparty?.did && e.counterparty.did !== "—"
+					? ` ← ${e.counterparty.did}`
+					: "";
+			lines.push(
+				`- [${e.agentId}] ${e.ts}${state}  ${e.summary}${cp}`.slice(0, 500),
+			);
+			// Inline the message body (outbound text + artifact answer)
+			// on continuation lines so the paste actually carries content
+			// instead of just "Artifact delivered". Cap each event's body
+			// to keep large markdown answers from drowning the dump.
+			if (e.body) {
+				const truncated = e.body.length > 1200
+					? e.body.slice(0, 1200) + "\n…[truncated]"
+					: e.body;
+				for (const ln of truncated.split("\n")) {
+					lines.push(`    ${ln}`);
+				}
+			}
+		}
+		return lines.join("\n");
+	}
+
+	const grouped = groupByThread(events);
+	const scoped = folder
+		? grouped.filter((t) => threadInFolder(t, folder, archivedThreads))
+		: grouped;
+	const matches = query
+		? scoped.filter((t) =>
+				`${t.contextId} ${t.latest.summary} ${t.earliest.summary}`
+					.toLowerCase()
+					.includes(query.toLowerCase()),
+			)
+		: scoped;
+
+	lines.push(`${matches.length} thread${matches.length === 1 ? "" : "s"}`);
+	lines.push("");
+	for (const t of matches) {
+		const peer = t.otherPartyAgentId ?? "(unknown)";
+		const peerDid =
+			t.earliest.payloadJson?.to_did ??
+			t.earliest.counterparty?.did ??
+			"";
+		const state = t.latest.state ?? "?";
+		lines.push(`## ${shortContextId(t.contextId)}`);
+		lines.push(`  origin: ${t.origin} ↔ ${peer}${peerDid ? `  (${peerDid})` : ""}`);
+		lines.push(`  state:  ${state}`);
+		lines.push(`  ${t.totalCount} events across ${t.agentIds.size} lane(s): ${[...t.agentIds].join(", ")}`);
+		lines.push(`  preview: ${(t.latest.summary || "").slice(0, 200)}`);
+		lines.push("");
+	}
+	return lines.join("\n").trimEnd();
+}
+
+function CopyViewButton({
+	events,
+	folderLabel,
+	folder,
+	query,
+	selectedThreadId,
+	archivedThreads,
+}: {
+	events: StreamEvent[];
+	folderLabel: string;
+	folder: "inbox" | "sent" | "archive" | null;
+	query: string;
+	selectedThreadId: string | null;
+	archivedThreads: Set<string>;
+}) {
+	const [copied, setCopied] = useState(false);
+	async function onClick() {
+		const dump = buildViewDump({
+			events,
+			folderLabel,
+			folder,
+			query,
+			selectedThreadId,
+			archivedThreads,
+		});
+		try {
+			await navigator.clipboard.writeText(dump);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1400);
+		} catch {
+			/* clipboard blocked — fail silent */
+		}
+	}
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			title={
+				selectedThreadId
+					? "Copy this thread as text"
+					: "Copy this folder's threads as text"
+			}
+			className="flex items-center gap-1 rounded-md border border-(--color-border) bg-white px-2 py-1 text-[11px] text-fg-muted transition hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
+		>
+			{copied ? (
+				<>
+					<CheckIcon size={11} weight="bold" />
+					Copied
+				</>
+			) : (
+				<>
+					<CopyIcon size={11} weight="bold" />
+					Copy
+				</>
+			)}
 		</button>
 	);
 }
@@ -52,7 +208,7 @@ function RefreshButton() {
 			type="button"
 			onClick={onClick}
 			title="Refresh"
-			className="flex items-center rounded-md border border-[--color-border] bg-white p-1.5 text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+			className="flex items-center rounded-md border border-(--color-border) bg-white p-1.5 text-fg-muted transition hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 		>
 			<ArrowsClockwiseIcon
 				size={12}
@@ -83,6 +239,7 @@ export function StreamPanel() {
 	const allEvents = useAllEvents();
 	const selectedThreadId = useUI((s) => s.selectedThreadId);
 	const selectThread = useUI((s) => s.selectThread);
+	const archivedThreads = useUI((s) => s.archivedThreads);
 	const [query, setQuery] = useState("");
 
 	// Clear the open thread + search when the user switches folder / agent —
@@ -118,7 +275,7 @@ export function StreamPanel() {
 
 	return (
 		<main className="flex min-w-0 flex-1 flex-col">
-			<header className="flex items-center justify-between gap-4 border-b border-[--color-border-soft] bg-[--color-panel] px-6 py-3">
+			<header className="flex items-center justify-between gap-4 border-b border-(--color-border-soft) bg-(--color-panel) px-6 py-3">
 				<div className="flex min-w-0 items-center gap-2.5">
 					{mode.kind === "folder" && (
 						<TrayIcon size={18} weight="duotone" className="text-fg-muted" />
@@ -136,7 +293,7 @@ export function StreamPanel() {
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
 						placeholder="Search in this folder…"
-						className="w-full rounded-md border border-[--color-border-soft] bg-slate-50 py-1 pl-6 pr-7 text-[12px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:bg-white focus:ring-2 focus:ring-[--color-cobalt-soft]"
+						className="w-full rounded-md border border-(--color-border-soft) bg-slate-50 py-1 pl-6 pr-7 text-[12px] text-fg placeholder-fg-faint outline-none transition focus:border-(--color-cobalt) focus:bg-white focus:ring-2 focus:ring-(--color-cobalt-soft)"
 					/>
 					{query && (
 						<button
@@ -150,6 +307,18 @@ export function StreamPanel() {
 					)}
 				</div>
 				<div className="flex items-center gap-2">
+					<CopyViewButton
+						events={filteredEvents}
+						folderLabel={title}
+						folder={
+							mode.kind === "folder" && mode.folder !== "drafts"
+								? mode.folder
+								: null
+						}
+						query={query}
+						selectedThreadId={selectedThreadId}
+						archivedThreads={archivedThreads}
+					/>
 					<RefreshButton />
 					{selectedThreadId && <DetailRailToggle />}
 				</div>
@@ -164,7 +333,7 @@ export function StreamPanel() {
 					className={clsx(
 						"flex min-h-0 flex-col",
 						selectedThreadId
-							? "hidden md:flex md:w-[380px] md:shrink-0 md:border-r md:border-[--color-border-soft]"
+							? "hidden md:flex md:w-[380px] md:shrink-0 md:border-r md:border-(--color-border-soft)"
 							: "flex-1",
 					)}
 				>

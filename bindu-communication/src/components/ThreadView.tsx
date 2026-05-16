@@ -41,11 +41,11 @@ export function ThreadView({ contextId }: Props) {
 
 	return (
 		<>
-			<div className="flex items-center gap-2 border-b border-[--color-border-soft] bg-white px-6 py-2.5">
+			<div className="flex items-center gap-2 border-b border-(--color-border-soft) bg-white px-6 py-2.5">
 				<button
 					type="button"
 					onClick={() => selectThread(null)}
-					className="flex items-center gap-1 rounded-md border border-[--color-border-soft] bg-white px-2 py-1 text-[11px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+					className="flex items-center gap-1 rounded-md border border-(--color-border-soft) bg-white px-2 py-1 text-[11px] text-fg-muted transition hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 				>
 					<ArrowLeftIcon size={11} weight="bold" />
 					Inbox
@@ -62,7 +62,7 @@ export function ThreadView({ contextId }: Props) {
 				</div>
 				<div className="flex items-center gap-2 text-[10px] text-fg-dim">
 					{agentLanes.length > 1 && (
-						<span className="rounded-full border border-[--color-cobalt]/40 bg-[--color-cobalt-soft] px-1.5 py-0.5 text-[--color-cobalt-strong]">
+						<span className="rounded-full border border-(--color-cobalt)/40 bg-(--color-cobalt-soft) px-1.5 py-0.5 text-(--color-cobalt-strong)">
 							stitched across {agentLanes.length} lanes
 						</span>
 					)}
@@ -120,7 +120,7 @@ function ReplyBox({
 
 	if (!target) {
 		return (
-			<div className="border-t border-[--color-border-soft] bg-slate-50 px-6 py-3 text-[11px] text-fg-dim">
+			<div className="border-t border-(--color-border-soft) bg-slate-50 px-6 py-3 text-[11px] text-fg-dim">
 				Replies aren't available for this thread (no agent target identified).
 			</div>
 		);
@@ -150,7 +150,7 @@ function ReplyBox({
 	return (
 		<form
 			onSubmit={handleSend}
-			className="border-t border-[--color-border-soft] bg-white px-6 py-3"
+			className="border-t border-(--color-border-soft) bg-white px-6 py-3"
 		>
 			<div className="mb-1.5 flex items-center justify-between text-[10px] text-fg-dim">
 				<span>
@@ -171,7 +171,7 @@ function ReplyBox({
 					}}
 					placeholder="Type a reply… (⌘↩ to send)"
 					rows={2}
-					className="flex-1 resize-none rounded-md border border-[--color-border] bg-white px-3 py-2 text-[13px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:ring-2 focus:ring-[--color-cobalt-soft]"
+					className="flex-1 resize-none rounded-md border border-(--color-border) bg-white px-3 py-2 text-[13px] text-fg placeholder-fg-faint outline-none transition focus:border-(--color-cobalt) focus:ring-2 focus:ring-(--color-cobalt-soft)"
 				/>
 				<button
 					type="submit"
@@ -179,7 +179,7 @@ function ReplyBox({
 					className={clsx(
 						"flex items-center gap-1.5 rounded-md px-3 py-2 text-[12px] font-medium shadow-sm transition",
 						canSubmit
-							? "bg-[--color-cobalt] text-white hover:bg-[--color-cobalt-strong]"
+							? "bg-(--color-cobalt) text-white hover:bg-(--color-cobalt-strong)"
 							: "bg-slate-200 text-slate-400",
 					)}
 				>

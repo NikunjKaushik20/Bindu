@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Opens at http://127.0.0.1:5174.
+Opens at http://127.0.0.1:3775. (3773 = bindufy agents, 3774 = gateway, 3775 = this UI; the API stays on 3787, proxied via `/api/*`.)
 
 ## Stack
 

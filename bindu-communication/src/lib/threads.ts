@@ -22,6 +22,16 @@ export interface Thread {
 	otherPartyAgentId: string | null;
 }
 
+/** Sortable timestamp for thread ordering. Prefers the full ISO
+ * (millisecond precision) when the event carries it; falls back to
+ * the HH:MM:SS slice for mock events that omit `at`. The HMS slice
+ * alone is ambiguous when an outbound send and the recipient's
+ * first webhook land in the same second — see Sent-vs-Inbox bug
+ * 2026-05-16. */
+function sortKey(e: StreamEvent): string {
+	return e.at ?? e.ts;
+}
+
 /**
  * Group events into Gmail-style threads keyed by their A2A `context_id`.
  *
@@ -37,6 +47,7 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 	for (const e of events) {
 		const ctx = extractContextId(e);
 		if (!ctx) continue;
+		const k = sortKey(e);
 		const existing = byCtx.get(ctx);
 		if (!existing) {
 			byCtx.set(ctx, {
@@ -45,8 +56,8 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 				earliest: e,
 				totalCount: 1,
 				attentionCount: e.needsAttention ? 1 : 0,
-				latestTs: e.ts,
-				earliestTs: e.ts,
+				latestTs: k,
+				earliestTs: k,
 				agentIds: new Set([e.agentId]),
 				origin: "operator",
 				otherPartyAgentId: null,
@@ -56,13 +67,26 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 		existing.totalCount += 1;
 		if (e.needsAttention) existing.attentionCount += 1;
 		existing.agentIds.add(e.agentId);
-		if (e.ts > existing.latestTs) {
+		if (k > existing.latestTs) {
 			existing.latest = e;
-			existing.latestTs = e.ts;
+			existing.latestTs = k;
 		}
-		if (e.ts < existing.earliestTs) {
+		if (k < existing.earliestTs) {
 			existing.earliest = e;
-			existing.earliestTs = e.ts;
+			existing.earliestTs = k;
+		}
+		// Tie-breaker for exact-equal ISO timestamps: if the outbox lane
+		// is one of the contenders, it wins as earliest. The user
+		// physically clicked Send before the peer's webhook bounced
+		// back — even if our server-side timestamps round to the same
+		// instant, the operator's intent was first. Without this, an
+		// operator-initiated thread could land in /inbox.
+		if (
+			k === existing.earliestTs &&
+			e.agentId === OUTBOX_AGENT_ID &&
+			existing.earliest.agentId !== OUTBOX_AGENT_ID
+		) {
+			existing.earliest = e;
 		}
 	}
 	// Materialise threads in one pass — derive origin + otherPartyAgentId
@@ -75,6 +99,8 @@ export function groupByThread(events: StreamEvent[]): Thread[] {
 	});
 	return threads.sort((a, b) => {
 		// Attention threads pinned to top, then by latest timestamp DESC.
+		// latestTs is the full ISO when available so ordering is correct
+		// even when multiple threads land in the same second.
 		const a1 = a.attentionCount > 0 ? 1 : 0;
 		const b1 = b.attentionCount > 0 ? 1 : 0;
 		if (a1 !== b1) return b1 - a1;

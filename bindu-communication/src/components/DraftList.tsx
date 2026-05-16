@@ -28,10 +28,10 @@ export function DraftList() {
 						type="button"
 						key={d.id}
 						onClick={() => openComposeWith(d.id)}
-						className="group flex w-full cursor-pointer items-center gap-3 border-b border-[--color-border-soft] px-4 py-2.5 text-left transition hover:bg-[--color-row-hover] md:px-6 md:py-3"
+						className="group flex w-full cursor-pointer items-center gap-3 border-b border-(--color-border-soft) px-4 py-2.5 text-left transition hover:bg-(--color-row-hover) md:px-6 md:py-3"
 					>
 						<div className="flex w-2.5 shrink-0 justify-center">
-							<span className="text-[--color-cobalt]">
+							<span className="text-(--color-cobalt)">
 								<FileIcon size={13} weight="duotone" />
 							</span>
 						</div>

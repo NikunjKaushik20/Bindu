@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Agent, DetailTab, StreamEvent } from "~/types";
+import type { PersonalAgent } from "~/lib/api-types";
 
 export interface Draft {
 	id: string;
@@ -43,6 +44,20 @@ interface UIState {
 	 * inbox surface stays Gmail-shape. */
 	showDetailRail: boolean;
 	toggleDetailRail: () => void;
+
+	// --- personal agent --------------------------------------------------
+	/** Operator's own bindufied agent. `null` = not yet onboarded; the
+	 * wizard takes over the screen when this is null. `undefined` = we
+	 * haven't fetched /api/me yet (still bootstrapping). */
+	me: PersonalAgent | null | undefined;
+	hydrateMe: () => Promise<void>;
+	setMe: (m: PersonalAgent | null) => void;
+	/** True while the first-run wizard is open. Persists across the
+	 * three steps so the user can navigate back without losing the
+	 * persona draft. */
+	wizardOpen: boolean;
+	openWizard: () => void;
+	closeWizard: () => void;
 }
 
 const DRAFTS_LS_KEY = "bindu-comms:drafts";
@@ -111,6 +126,25 @@ export const useUI = create<UIState>((set) => ({
 	drafts: loadDrafts(),
 	composeDraftId: null,
 	showDetailRail: false,
+
+	me: undefined,
+	hydrateMe: async () => {
+		try {
+			const r = await fetch("/api/me");
+			if (!r.ok) {
+				set({ me: null });
+				return;
+			}
+			const j = (await r.json()) as PersonalAgent | null;
+			set({ me: j });
+		} catch {
+			set({ me: null });
+		}
+	},
+	setMe: (m) => set({ me: m }),
+	wizardOpen: false,
+	openWizard: () => set({ wizardOpen: true }),
+	closeWizard: () => set({ wizardOpen: false }),
 
 	selectEvent: (id) => set({ selectedEventId: id }),
 	toggleDetailRail: () => set((s) => ({ showDetailRail: !s.showDetailRail })),

@@ -53,6 +53,12 @@ export interface StreamEvent {
 	action?: { kind: "approve" | "pay" | "input"; label: string };
 	signed: boolean;
 	verify: { signature: boolean; didMatch: boolean; nonce: string };
+	/** Full message body, rendered inline in the thread view. Populated for
+	 * outbound sends (the operator's typed text) and artifact-update events
+	 * (the agent's response text extracted from `artifact.parts[].text`).
+	 * Other event kinds — lifecycle, state-change, plan-step — leave this
+	 * undefined and fall back to the one-line summary. */
+	body?: string;
 	/** Pretty-printed JSON of the source payload, kept for the Inspect tab. */
 	payload?: string;
 	/** Parsed payload object — populated at SSE-ingest so downstream code

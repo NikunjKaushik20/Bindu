@@ -146,7 +146,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 	return (
 		<div>
 			{selected.size > 0 && (
-				<div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[--color-border] bg-[--color-cobalt-soft] px-6 py-2 text-[12px]">
+				<div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-(--color-border) bg-(--color-cobalt-soft) px-6 py-2 text-[12px]">
 					<div className="flex items-center gap-2">
 						<button
 							type="button"
@@ -156,7 +156,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 						>
 							<XIcon size={12} weight="bold" />
 						</button>
-						<span className="font-medium text-[--color-cobalt-strong]">
+						<span className="font-medium text-(--color-cobalt-strong)">
 							{selected.size} selected
 						</span>
 						<button
@@ -172,7 +172,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 							type="button"
 							onClick={() => bulk("read")}
 							title="Mark selected as read"
-							className="flex items-center gap-1 rounded-md border border-[--color-border] bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+							className="flex items-center gap-1 rounded-md border border-(--color-border) bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 						>
 							<EnvelopeOpenIcon size={11} weight="bold" />
 							Read
@@ -181,7 +181,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 							type="button"
 							onClick={() => bulk("unread")}
 							title="Mark selected as unread"
-							className="flex items-center gap-1 rounded-md border border-[--color-border] bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+							className="flex items-center gap-1 rounded-md border border-(--color-border) bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 						>
 							<EnvelopeSimpleIcon size={11} weight="bold" />
 							Unread
@@ -191,7 +191,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 								type="button"
 								onClick={() => bulk("unarchive")}
 								title="Restore selected"
-								className="flex items-center gap-1 rounded-md border border-[--color-border] bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+								className="flex items-center gap-1 rounded-md border border-(--color-border) bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 							>
 								<ArrowArcLeftIcon size={11} weight="bold" />
 								Restore
@@ -201,7 +201,7 @@ export function ThreadList({ events, mode = "inbox", query = "" }: Props) {
 								type="button"
 								onClick={() => bulk("archive")}
 								title="Archive selected"
-								className="flex items-center gap-1 rounded-md border border-[--color-border] bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+								className="flex items-center gap-1 rounded-md border border-(--color-border) bg-white px-2 py-1 text-[11px] text-fg-muted hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 							>
 								<ArchiveIcon size={11} weight="bold" />
 								Archive
@@ -280,9 +280,9 @@ function ThreadRow({
 				}
 			}}
 			className={clsx(
-				"group flex w-full cursor-pointer items-center gap-3 border-b border-[--color-border-soft] px-4 py-3 text-left transition hover:bg-[--color-row-hover] md:px-6 md:py-3.5",
+				"group flex w-full cursor-pointer items-center gap-3 border-b border-(--color-border-soft) px-4 py-3 text-left transition hover:bg-(--color-row-hover) md:px-6 md:py-3.5",
 				isUnread && "bg-yellow-50/40",
-				selected && "bg-[--color-cobalt-soft]",
+				selected && "bg-(--color-cobalt-soft)",
 			)}
 		>
 			{/* Selection checkbox — visible on hover or when selected. */}
@@ -296,8 +296,8 @@ function ThreadRow({
 				className={clsx(
 					"flex h-4 w-4 shrink-0 items-center justify-center rounded border transition",
 					selected
-						? "border-[--color-cobalt] bg-[--color-cobalt] text-white"
-						: "border-[--color-border] bg-white opacity-0 group-hover:opacity-100",
+						? "border-(--color-cobalt) bg-(--color-cobalt) text-white"
+						: "border-(--color-border) bg-white opacity-0 group-hover:opacity-100",
 				)}
 			>
 				{selected && <CheckIcon size={9} weight="bold" />}
@@ -307,7 +307,7 @@ function ThreadRow({
 			<div className="relative shrink-0">
 				<Avatar seed={labelTarget} />
 				{isUnread && !selected && (
-					<span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[--color-cobalt] ring-2 ring-white" />
+					<span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-(--color-cobalt) ring-2 ring-white" />
 				)}
 			</div>
 
@@ -331,7 +331,7 @@ function ThreadRow({
 					)}
 					{isUnread && (
 						<span
-							className="shrink-0 text-[--color-sunflower-strong]"
+							className="shrink-0 text-(--color-sunflower-strong)"
 							title="Needs your reply"
 						>
 							<ArrowBendUpLeftIcon size={12} weight="bold" />
@@ -350,7 +350,7 @@ function ThreadRow({
 								else onMarkUnread();
 							}}
 							title={isUnread ? "Mark as read" : "Mark as unread"}
-							className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-[--color-cobalt]"
+							className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-(--color-cobalt)"
 						>
 							{isUnread ? (
 								<EnvelopeOpenIcon size={13} weight="bold" />
@@ -366,7 +366,7 @@ function ThreadRow({
 									onUnarchive();
 								}}
 								title="Restore to inbox"
-								className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-[--color-cobalt]"
+								className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-(--color-cobalt)"
 							>
 								<ArrowArcLeftIcon size={13} weight="bold" />
 							</button>
@@ -378,7 +378,7 @@ function ThreadRow({
 									onArchive();
 								}}
 								title="Archive"
-								className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-[--color-cobalt]"
+								className="rounded p-1 text-fg-dim hover:bg-slate-100 hover:text-(--color-cobalt)"
 							>
 								<ArchiveIcon size={13} weight="bold" />
 							</button>

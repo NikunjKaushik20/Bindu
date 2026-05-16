@@ -13,9 +13,13 @@ interface RawWebhook {
 		kind?: "status-update" | "artifact-update" | "gateway-event" | string;
 		task_id?: string;
 		context_id?: string;
-		status?: { state?: string };
+		status?: { state?: string; message?: unknown };
 		artifact?: unknown;
 		final?: boolean;
+		// `status.message` carries the agent's prompt on intermediate
+		// states (input-required, payment-required, auth-required).
+		// Same A2A Message shape as artifact.parts — the mapper reuses
+		// the same extractor.
 		// gateway-event extras
 		event_type?: string;
 		parent_id?: string;
@@ -73,9 +77,10 @@ function mapOutboundEvent(raw: RawWebhook): StreamEvent {
 	const p = raw.payload;
 	const upstreamOk =
 		!p.upstream_error && (p.upstream_status ?? 0) >= 200 && (p.upstream_status ?? 0) < 300;
+	const fullText = p.text ?? "";
 	const summary = p.upstream_error
 		? `Send failed: ${p.upstream_error.slice(0, 80)}`
-		: `“${(p.text ?? "").slice(0, 120)}”`;
+		: `“${fullText.slice(0, 120)}”`;
 	const { hms, iso } = pickTs(raw);
 	return {
 		id: raw.id,
@@ -91,6 +96,7 @@ function mapOutboundEvent(raw: RawWebhook): StreamEvent {
 		kind: "human-action",
 		state: upstreamOk ? "submitted" : p.upstream_error ? "failed" : "pending",
 		summary,
+		body: p.upstream_error ? undefined : fullText || undefined,
 		signed: false,
 		verify: {
 			signature: false,
@@ -173,6 +179,28 @@ function mapGatewayEvent(raw: RawWebhook): StreamEvent {
 	};
 }
 
+/** Pull human-readable text out of any A2A container that carries a
+ * `parts` array — works on both artifacts and status messages, which
+ * share the same Message shape. Only `kind: "text"` entries
+ * contribute; file/data parts are skipped (no inline viewer yet).
+ * Returns undefined when there's nothing to show, so the row falls
+ * back to its one-line summary. */
+function extractTextParts(container: unknown): string | undefined {
+	if (!container || typeof container !== "object") return undefined;
+	const parts = (container as { parts?: unknown }).parts;
+	if (!Array.isArray(parts)) return undefined;
+	const texts: string[] = [];
+	for (const part of parts) {
+		if (!part || typeof part !== "object") continue;
+		const kind = (part as { kind?: unknown }).kind;
+		const text = (part as { text?: unknown }).text;
+		if (kind === "text" && typeof text === "string" && text.length > 0) {
+			texts.push(text);
+		}
+	}
+	return texts.length > 0 ? texts.join("\n\n") : undefined;
+}
+
 export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 	const p = raw.payload;
 
@@ -182,6 +210,13 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 	const isArtifact = p.kind === "artifact-update";
 	const state = normalizeState(p.status?.state, isArtifact);
 	const firstContact = !isArtifact && (raw.firstContact ?? false);
+	// Body precedence: artifact text on artifact-update events (the
+	// final answer), else the status.message text on status-update
+	// events (the agent's prompt on input-required / payment-required
+	// / auth-required, when the core forwards it).
+	const body = isArtifact
+		? extractTextParts(p.artifact)
+		: extractTextParts(p.status?.message);
 
 	let kind: EventKind;
 	if (isArtifact) kind = "artifact";
@@ -221,6 +256,7 @@ export function mapWebhookToEvent(raw: RawWebhook): StreamEvent {
 		kind,
 		state,
 		summary,
+		body,
 		needsAttention: state ? ATTENTION_STATES.has(state) || undefined : undefined,
 		action: state ? ACTION_FOR_STATE[state] : undefined,
 		signed: false,

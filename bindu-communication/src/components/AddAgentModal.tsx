@@ -45,10 +45,10 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 		<Modal open={open} onClose={onClose}>
 			<form
 				onSubmit={handleSubmit}
-				className="w-[480px] max-w-[92vw] rounded-lg border border-[--color-border] bg-white shadow-2xl"
+				className="w-[480px] max-w-[92vw] rounded-lg border border-(--color-border) bg-white shadow-2xl"
 			>
-				<div className="flex items-center gap-2.5 border-b border-[--color-border-soft] px-5 py-3">
-					<GlobeIcon size={18} weight="duotone" className="text-[--color-cobalt]" />
+				<div className="flex items-center gap-2.5 border-b border-(--color-border-soft) px-5 py-3">
+					<GlobeIcon size={18} weight="duotone" className="text-(--color-cobalt)" />
 					<div className="flex-1">
 						<h2 className="text-[14px] font-medium text-fg">Add agent to ecosystem</h2>
 						<div className="text-[10px] text-fg-dim">
@@ -75,7 +75,7 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 							value={url}
 							onChange={(e) => setUrl(e.target.value)}
 							placeholder="http://localhost:3773"
-							className="mt-1.5 w-full rounded-md border border-[--color-border] bg-white px-3 py-2 text-[13px] text-fg placeholder-fg-faint outline-none transition focus:border-[--color-cobalt] focus:ring-2 focus:ring-[--color-cobalt-soft]"
+							className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-[13px] text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-700 focus:ring-2 focus:ring-blue-200"
 						/>
 						<div className="mt-1 text-[10px] text-fg-dim">
 							Must serve <code>/.well-known/agent.json</code>.
@@ -89,11 +89,11 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 					)}
 				</div>
 
-				<div className="flex items-center justify-end gap-2 border-t border-[--color-border-soft] bg-slate-50 px-5 py-3">
+				<div className="flex items-center justify-end gap-2 border-t border-(--color-border-soft) bg-slate-50 px-5 py-3">
 					<button
 						type="button"
 						onClick={onClose}
-						className="rounded-md border border-[--color-border] bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
+						className="rounded-md border border-(--color-border) bg-white px-3 py-1.5 text-[12px] text-fg-muted transition hover:border-(--color-cobalt) hover:text-(--color-cobalt)"
 					>
 						Cancel
 					</button>
@@ -103,7 +103,7 @@ export function AddAgentModal({ open, onClose, onAdded }: Props) {
 						className={clsx(
 							"rounded-md px-3 py-1.5 text-[12px] font-medium shadow-sm transition",
 							canSubmit
-								? "bg-[--color-cobalt] text-white hover:bg-[--color-cobalt-strong]"
+								? "bg-blue-700 text-white hover:bg-blue-800"
 								: "bg-slate-200 text-slate-400",
 						)}
 					>
