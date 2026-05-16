@@ -8,13 +8,11 @@ import { useEffect } from "react";
 import { Sidebar } from "~/components/Sidebar";
 import { StreamPanel } from "~/components/StreamPanel";
 import { DetailRail } from "~/components/DetailRail";
-import { RegisterModal } from "~/components/RegisterModal";
 import { ComposeModal } from "~/components/ComposeModal";
 import { useUI } from "~/state";
 import { mapWebhookToEvent } from "~/lib/liveStream";
 
 function Shell() {
-	const openRegister = useUI((s) => s.openRegister);
 	const openCompose = useUI((s) => s.openCompose);
 	const showCompose = useUI((s) => s.showCompose);
 	const closeCompose = useUI((s) => s.closeCompose);
@@ -37,11 +35,6 @@ function Shell() {
 
 	useEffect(() => {
 		function onKey(e: KeyboardEvent) {
-			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "n") {
-				e.preventDefault();
-				openRegister();
-				return;
-			}
 			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
 				e.preventDefault();
 				openCompose();
@@ -49,7 +42,7 @@ function Shell() {
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [openRegister, openCompose]);
+	}, [openCompose]);
 
 	useEffect(() => {
 		const token = import.meta.env.VITE_COMMS_TOKEN as string | undefined;
@@ -72,7 +65,6 @@ function Shell() {
 			<Sidebar />
 			<StreamPanel />
 			{railVisible && <DetailRail />}
-			<RegisterModal />
 			<ComposeModal open={showCompose} onClose={closeCompose} />
 		</div>
 	);

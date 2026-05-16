@@ -4,13 +4,14 @@ import { ArrowLeftIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { useUI } from "~/state";
 import { eventsInThread, shortContextId } from "~/lib/threads";
 import { EventRow } from "./EventRow";
+import { useAllEvents } from "~/lib/hooks";
+import { postJson } from "~/lib/fetch";
+import { OUTBOX_AGENT_ID } from "~/lib/constants";
 import type { StreamEvent } from "~/types";
 
 interface Props {
 	contextId: string;
 }
-
-const OUTBOX_AGENT_ID = "outbox";
 
 /**
  * One thread's events, oldest → newest. Spans all agents (live + mock)
@@ -22,8 +23,11 @@ const OUTBOX_AGENT_ID = "outbox";
  */
 export function ThreadView({ contextId }: Props) {
 	const selectThread = useUI((s) => s.selectThread);
-	const liveEvents = useUI((s) => s.liveEvents);
-	const ordered = eventsInThread(liveEvents, contextId);
+	const allEvents = useAllEvents();
+	const ordered = useMemo(
+		() => eventsInThread(allEvents, contextId),
+		[allEvents, contextId],
+	);
 	const first = ordered[0];
 	const counterpartyName = first?.counterparty.name ?? "—";
 	const agentLanes = Array.from(new Set(ordered.map((e) => e.agentId)));
@@ -135,32 +139,18 @@ function ReplyBox({
 		if (!canSubmit) return;
 		setStatus("sending");
 		setErrMsg(null);
-		try {
-			const r = await fetch("/api/compose", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({
-					agentId: target,
-					text: text.trim(),
-					contextId,
-				}),
-			});
-			const j = (await r.json().catch(() => ({}))) as {
-				ok?: boolean;
-				error?: string;
-				detail?: string;
-			};
-			if (!r.ok || j.ok === false) {
-				setStatus("error");
-				setErrMsg(j.detail ?? j.error ?? `HTTP ${r.status}`);
-				return;
-			}
-			setText("");
-			setStatus("idle");
-		} catch (err) {
+		const r = await postJson("/api/compose", {
+			agentId: target,
+			text: text.trim(),
+			contextId,
+		});
+		if (!r.ok) {
 			setStatus("error");
-			setErrMsg((err as Error).message);
+			setErrMsg(r.errMsg);
+			return;
 		}
+		setText("");
+		setStatus("idle");
 	}
 
 	return (

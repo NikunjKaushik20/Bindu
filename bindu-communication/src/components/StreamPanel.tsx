@@ -9,6 +9,7 @@ import {
 	ArrowsClockwiseIcon,
 } from "@phosphor-icons/react";
 import { useUI } from "~/state";
+import { useAllEvents } from "~/lib/hooks";
 import { ThreadList } from "./ThreadList";
 import { ThreadView } from "./ThreadView";
 import { DraftList } from "./DraftList";
@@ -79,7 +80,7 @@ function useMode(): Mode {
 export function StreamPanel() {
 	const mode = useMode();
 	const agents = useUI((s) => s.agents);
-	const liveEvents = useUI((s) => s.liveEvents);
+	const allEvents = useAllEvents();
 	const selectedThreadId = useUI((s) => s.selectedThreadId);
 	const selectThread = useUI((s) => s.selectThread);
 	const [query, setQuery] = useState("");
@@ -99,10 +100,10 @@ export function StreamPanel() {
 	// debug mode keeps the legacy per-lane filter.
 	const filteredEvents = useMemo(() => {
 		if (mode.kind === "agent") {
-			return liveEvents.filter((e) => e.agentId === mode.agentId);
+			return allEvents.filter((e) => e.agentId === mode.agentId);
 		}
-		return liveEvents;
-	}, [mode, liveEvents]);
+		return allEvents;
+	}, [mode, allEvents]);
 
 	const FOLDER_TITLES: Record<Folder, string> = {
 		inbox: "Inbox",

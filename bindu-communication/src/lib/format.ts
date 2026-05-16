@@ -14,9 +14,8 @@ export function shortDid(did: string, tailChars = 6): string {
 
 /** Normalise a free-form name into a URL/agent-id-safe slug.
  *
- * Used wherever the UI mints an id from a human-readable name:
- * register-agent flow (`state.ts` + `RegisterModal`). Falls back to a
- * short random id when the input slugs to empty. */
+ * Used wherever the UI mints an id from a human-readable name. Falls
+ * back to a short random id when the input slugs to empty. */
 export function slugify(name: string, fallbackPrefix = "agent"): string {
 	const slug = name
 		.toLowerCase()

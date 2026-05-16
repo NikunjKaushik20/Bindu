@@ -1,17 +1,5 @@
 import { create } from "zustand";
-import type { Agent, AgentRole, DetailTab, StreamEvent } from "~/types";
-
-export type TrustPolicy =
-	| "fully-supervised"
-	| "policy-driven"
-	| "fully-autonomous";
-
-export interface NewAgentDraft {
-	name: string;
-	role: AgentRole;
-	did: string;
-	trustPolicy: TrustPolicy;
-}
+import type { Agent, DetailTab, StreamEvent } from "~/types";
 
 export interface Draft {
 	id: string;
@@ -25,7 +13,6 @@ interface UIState {
 	selectedEventId: string | null;
 	selectedThreadId: string | null;
 	detailTab: DetailTab;
-	showRegister: boolean;
 	showCompose: boolean;
 	agents: Agent[];
 	liveEvents: StreamEvent[];
@@ -40,11 +27,8 @@ interface UIState {
 	selectEvent: (id: string | null) => void;
 	selectThread: (contextId: string | null) => void;
 	setDetailTab: (tab: DetailTab) => void;
-	openRegister: () => void;
-	closeRegister: () => void;
 	openCompose: () => void;
 	closeCompose: () => void;
-	registerAgent: (draft: NewAgentDraft) => Agent;
 	addLiveEvent: (e: StreamEvent) => void;
 	markRead: (contextId: string) => void;
 	markUnread: (contextId: string) => void;
@@ -118,7 +102,6 @@ export const useUI = create<UIState>((set) => ({
 	selectedEventId: null,
 	selectedThreadId: null,
 	detailTab: "glance",
-	showRegister: false,
 	showCompose: false,
 	agents: [],
 	liveEvents: [],
@@ -147,8 +130,6 @@ export const useUI = create<UIState>((set) => ({
 			};
 		}),
 	setDetailTab: (tab) => set({ detailTab: tab }),
-	openRegister: () => set({ showRegister: true }),
-	closeRegister: () => set({ showRegister: false }),
 	openCompose: () => set({ showCompose: true, composeDraftId: null }),
 	closeCompose: () => set({ showCompose: false, composeDraftId: null }),
 	openComposeWith: (draftId) =>
@@ -165,21 +146,6 @@ export const useUI = create<UIState>((set) => ({
 			saveDrafts(next);
 			return { drafts: next };
 		}),
-	registerAgent: (draft) => {
-		const id = draft.name
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/(^-|-$)/g, "")
-			|| `agent-${Math.random().toString(36).slice(2, 6)}`;
-		const newAgent: Agent = {
-			id,
-			name: draft.name,
-			did: draft.did,
-			role: draft.role,
-		};
-		set((s) => ({ agents: [...s.agents, newAgent], showRegister: false }));
-		return newAgent;
-	},
 	markRead: (contextId) =>
 		set((s) => {
 			const read = new Set(s.readOverrides);

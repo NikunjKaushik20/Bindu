@@ -12,15 +12,8 @@ import {
 import { useUI } from "~/state";
 import { shortDid } from "~/lib/format";
 import { AddAgentModal } from "./AddAgentModal";
+import type { EcosystemAgent } from "~/lib/api-types";
 import clsx from "clsx";
-
-interface EcosystemAgent {
-	id: string;
-	url?: string;
-	did?: { id?: string } | null;
-	agentCard?: { name?: string } | null;
-	source: "webhook" | "manual";
-}
 
 function useEcosystem() {
 	const [list, setList] = useState<EcosystemAgent[]>([]);
@@ -52,7 +45,6 @@ const FOLDERS = [
 ] as const;
 
 export function Sidebar() {
-	const openRegister = useUI((s) => s.openRegister);
 	const openCompose = useUI((s) => s.openCompose);
 	const drafts = useUI((s) => s.drafts);
 	const [showAdd, setShowAdd] = useState(false);
@@ -168,17 +160,8 @@ export function Sidebar() {
 				</div>
 			</div>
 
-			{/* You + Register-agent footer */}
+			{/* You — operator identity */}
 			<div className="mt-auto border-t border-[--color-border-soft] px-4 py-3">
-				<button
-					type="button"
-					onClick={openRegister}
-					className="mb-2 flex w-full items-center gap-1.5 rounded-md border border-[--color-border-soft] bg-white px-2 py-1 text-[10px] text-fg-muted transition hover:border-[--color-cobalt] hover:text-[--color-cobalt]"
-					title="Register a new local agent (⌘N)"
-				>
-					<PlusIcon size={10} weight="bold" />
-					Register agent
-				</button>
 				<div className="text-[10px] text-fg-dim">
 					You: <span className="text-fg-muted">raahul@getbindu</span>
 				</div>
