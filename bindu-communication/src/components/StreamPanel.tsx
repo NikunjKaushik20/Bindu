@@ -115,13 +115,28 @@ export function StreamPanel() {
 					</button>
 				</div>
 			</header>
-			{selectedThreadId ? (
-				<ThreadView contextId={selectedThreadId} />
-			) : (
-				<div className="scrollbar flex-1 overflow-y-auto">
-					<ThreadList events={filteredEvents} />
+			{/* MailboxSplitView — list shrinks to 380px when a thread opens,
+			    the thread renders to the right. On mobile the list hides
+			    when a thread is open (the view takes the full width). */}
+			<div className="flex min-h-0 flex-1">
+				<div
+					className={clsx(
+						"flex min-h-0 flex-col",
+						selectedThreadId
+							? "hidden md:flex md:w-[380px] md:shrink-0 md:border-r md:border-[--color-border-soft]"
+							: "flex-1",
+					)}
+				>
+					<div className="scrollbar flex-1 overflow-y-auto">
+						<ThreadList events={filteredEvents} />
+					</div>
 				</div>
-			)}
+				{selectedThreadId && (
+					<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+						<ThreadView contextId={selectedThreadId} />
+					</div>
+				)}
+			</div>
 		</main>
 	);
 }
