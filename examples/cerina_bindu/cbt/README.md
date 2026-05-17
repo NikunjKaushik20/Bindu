@@ -1,83 +1,49 @@
-# Cerina Bindu
+# Cerina CBT Supervisor
 
-A production-ready **Cognitive Behavioral Therapy (CBT) agent system** built on the Bindu framework using LangGraph multi-agent orchestration.
+A real LangGraph workflow wrapped as one bindu agent. Internally three nodes — Drafter, Safety Guardian, Clinical Critic — collaborate under a Supervisor to produce a CBT (cognitive behavioural therapy) exercise on a user-supplied concern. The Supervisor loops until the Safety Guardian and Clinical Critic both pass.
 
-This example demonstrates how to integrate a complex multi-agent workflow into Bindu — showing that `bindufy()` works with sophisticated, production-grade agent architectures, not just simple single-agent setups.
+Different from `agent_swarm` in that the orchestration is a real LangGraph `StateGraph` with merge functions on the shared state, not an ad-hoc Python pipeline.
 
----
-
-## What It Does
-
-Takes a user concern and generates a personalized CBT exercise through a three-agent pipeline:
-
-```
-User concern
-     ↓
-Drafter Agent → creates initial CBT protocol
-     ↓
-Safety Guardian → validates clinical safety (0-100 score)
-     ↓
-Clinical Critic → ensures therapeutic quality (0-100 score)
-     ↓
-Structured CBT response with safety + quality scores
-```
-
----
-
-## Contents
-
-```
-cerina_bindu/
-└── cbt/                          — Main CBT agent implementation
-    ├── supervisor_cbt.py         — Bindu entry point (@bindufy decorator)
-    ├── agents.py                 — Three agent implementations
-    ├── workflow.py               — LangGraph workflow orchestration
-    ├── langgraph_integration.py  — LangGraph ↔ Bindu adapter
-    ├── state_mapper.py           — State ↔ Bindu artifact mapping
-    ├── state.py                  — ProtocolState schema
-    ├── utils.py                  — Helper functions
-    ├── database.py               — Optional session persistence
-    ├── skills/                   — Bindu skill definition
-    └── README.md                 — Full setup and usage guide
-```
-
----
-
-## Quick Start
+## Setup
 
 ```bash
-# From Bindu root directory
-cd examples/cerina_bindu/cbt
-
-# Set your API key
-cp .env.example .env
-# Add OPENROUTER_API_KEY to .env
-
-# Run the agent
-uv run python supervisor_cbt.py
+export OPENROUTER_API_KEY=<get one at https://openrouter.ai/keys>
+uv sync --extra agents
 ```
 
-Agent starts at `http://localhost:3773`. See [`cbt/README.md`](cbt/README.md) for full usage instructions including example curl commands.
+LangGraph + LangChain-OpenAI come in via the `agents` extra. The agent uses OpenRouter via `langchain_openai.ChatOpenAI(base_url=...)`.
 
----
+## Run
 
-## What This Demonstrates
+```bash
+uv run examples/cerina_bindu/cbt/supervisor_cbt.py
+# http://localhost:3773
+```
 
-- **Complex workflow bindufying** — a full LangGraph multi-agent pipeline wrapped in a single `bindufy()` call
-- **Framework agnostic** — LangGraph + Bindu working together seamlessly
-- **Production patterns** — safety validation, quality scoring, structured artifact output
-- **Skill integration** — custom Bindu skill definition for CBT therapy
+## Talk to it
 
----
+With `AUTH__ENABLED=false`:
 
-## Background
+```bash
+curl -sS http://localhost:3773/ \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Generate a short CBT exercise for managing test anxiety."}],"kind":"message","messageId":"m1","contextId":"c1","taskId":"t1"}}}'
+```
 
-Based on [Cerina Protocol Foundry](https://github.com/Danish137/cerina-protocol-foundry) — a research project for generating therapeutic CBT protocols using multi-agent LLM orchestration.
+The Drafter → SafetyGuardian → ClinicalCritic → Supervisor loop takes 60–180s. Poll `tasks/get` with a generous timeout — by default the harness times out at 60s and the workflow is still in `working` state. Use ≥180s.
 
----
+## What's in here
 
-## Related Examples
+| File | Role |
+| --- | --- |
+| `supervisor_cbt.py` | bindu wrapper — entry point. |
+| `langgraph_integration.py` | Builds the LangGraph workflow + OpenRouter LLM client. |
+| `agents.py` | Drafter, Safety Guardian, Clinical Critic, Supervisor implementations. |
+| `state.py` | Shared `ProtocolState` TypedDict + merge functions. |
+| `state_mapper.py` | Translates between bindu artifacts and LangGraph state. |
+| `workflow.py` | `StateGraph` topology and routing. |
+| `database.py` | Optional SQLAlchemy persistence for sessions. |
 
-- [`examples/collaborative-agents/`](../collaborative-agents/) — multi-agent A2A communication
-- [`examples/agent_swarm/`](../agent_swarm/) — agent swarm patterns
-- [`examples/beginner/`](../beginner/) — simple single-agent examples
+> Educational example. CBT generated here is not clinical advice — same caveat as `medical_agent`.
+
+With auth on, sign each body with the agent's DID key — see [`docs/AUTH.md`](../../../docs/AUTH.md).
