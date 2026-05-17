@@ -94,11 +94,21 @@ def create_agent_card(app: BinduApplication) -> AgentCard:
     # Minimize skills to just id, name, and documentation_path (URL) - full details via dedicated endpoint
     minimal_skills = []
     for skill in manifest.skills:
+        # Skills can arrive in three shapes:
+        #   1. dict with "id" + "name" — Python agents using on-disk skill files
+        #   2. dict with just "name" (no "id") — gRPC-registered TS/Kotlin agents:
+        #      _proto_skills_to_dicts() in bindu/grpc/service.py builds these.
+        #   3. bare string — defensive: if a future SDK sends raw skill paths.
+        if isinstance(skill, str):
+            skill_id = skill_name = skill
+        else:
+            skill_name = skill["name"]
+            skill_id = skill.get("id", skill_name)
         minimal_skills.append(
             {
-                "id": skill["id"],
-                "name": skill["name"],
-                "documentation_path": f"{app.url}/agent/skills/{skill['id']}",
+                "id": skill_id,
+                "name": skill_name,
+                "documentation_path": f"{app.url}/agent/skills/{skill_id}",
             }
         )
 
