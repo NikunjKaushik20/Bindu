@@ -24,14 +24,14 @@ X-DID-Timestamp:  <unix-seconds>                  ← within 300s of server cloc
 X-DID-Signature:  <base58 Ed25519 sig>            ← signs {body, did, timestamp}
 ```
 
-The agent verifies them in four gates. The first failure stops the chain:
+The agent verifies them in four gates. The first failure stops the chain. Observed responses against a live `AUTH__ENABLED=true` agent:
 
-| Gate | What's checked | Failure code |
+| Gate | What's checked | On failure |
 | --- | --- | --- |
-| 1 | Bearer token is active in Hydra | `invalid_token` / `expired` |
-| 2 | `X-DID` matches the token's `client_id` | `did_mismatch` |
-| 3 | A public key for that DID is registered in Hydra's client metadata | `public_key_unavailable` |
-| 4 | Timestamp within 300s **and** signature verifies against the public key | `timestamp_out_of_window` / `crypto_mismatch` |
+| 1 | Bearer token present and active in Hydra | **HTTP 401** + JSON-RPC `-32009 "Authentication is required..."` |
+| 2 | `X-DID` matches the token's `client_id` | **HTTP 403** + `{"error":"Invalid DID signature","details":{"reason":"did_mismatch"}}` |
+| 3 | Public key for that DID is registered in Hydra client metadata | **HTTP 403** + `details.reason` = `public_key_unavailable` |
+| 4 | Timestamp within 300s **and** signature verifies | **HTTP 403** + `details.reason` = `invalid_signature` (covers both clock skew and bad sig — middleware collapses them) |
 
 If all four pass, your handler runs.
 
@@ -203,16 +203,17 @@ If the agent's middleware passes all four gates, your handler runs and you get a
 
 ## What can go wrong
 
-| Symptom | Most likely cause | Fix |
+| Response | Most likely cause | Fix |
 | --- | --- | --- |
-| `-32009 Authentication is required` | No `Authorization` header | Mint a token, attach it |
-| `invalid_token` on introspection | Token expired | Mint a fresh one (tokens last ~1h) |
-| `did_mismatch` | `X-DID` doesn't match the token's `client_id` | Make sure you minted the token with the same DID you're sending as `X-DID` |
-| `public_key_unavailable` | `metadata.public_key` wasn't set when you registered, or you registered against a different Hydra | `GET /admin/clients/<did>` and check |
-| `timestamp_out_of_window` | Server and your machine disagree by more than 300s, OR you cached + replayed a signature | Re-sign on every request; check `date -u` |
-| `crypto_mismatch` | Body bytes drifted between sign and send, OR sort_keys/whitespace mismatch | Sign the exact bytes you'll send; use the canonical fixture below |
-| `invalid_client` at `/oauth2/token` | Wrong `client_secret` or client not registered on this Hydra | Confirm with `GET /admin/clients/<did>` |
-| `invalid_scope` at `/oauth2/token` | Asking for a scope you didn't register | Either re-register with the scope or drop it |
+| HTTP 401, JSON-RPC `-32009 Authentication is required` | No `Authorization` header, or token is invalid/expired | Mint a fresh token, attach as `Authorization: Bearer …` |
+| HTTP 403, `details.reason = did_mismatch` | `X-DID` doesn't match the token's `client_id` | Mint the token with the same DID you send as `X-DID` |
+| HTTP 403, `details.reason = public_key_unavailable` | `metadata.public_key` missing on the Hydra client, or you registered against a different Hydra | `GET /admin/clients/<did>` and check |
+| HTTP 403, `details.reason = invalid_signature` | One of: clock skew > 300s, replayed timestamp, body bytes drifted between sign and send, sort_keys/whitespace mismatch, signed with the wrong seed | Sign fresh on every request; sign the exact bytes you'll send; verify against the [canonical fixture](#canonical-fixture) |
+| HTTP 400, `-32700` JSON parse error (e.g. `params.configuration` field required) | Body shape wrong **before** auth runs — JSON-RPC validator rejects upfront | This is a body bug, not an auth bug. Include `params.configuration` and confirm against an unauthed peer first |
+| `invalid_client` from `/oauth2/token` | Wrong `client_secret` or client not registered on this Hydra | `GET /admin/clients/<did>` to confirm |
+| `invalid_scope` from `/oauth2/token` | Requesting a scope the client wasn't registered with | Re-register with the scope, or drop it |
+
+The middleware collapses the four sub-causes of "signature didn't verify" into one `invalid_signature` reason. To narrow it down: re-sign with a fresh timestamp first — that eliminates clock skew and replay. If it still fails, you have a body-byte or key-mismatch issue.
 
 A debugging shortcut: introspect your own token and check `client_id` is what you expect.
 
