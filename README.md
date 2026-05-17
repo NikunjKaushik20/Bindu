@@ -178,7 +178,11 @@ Every row here links out to the guide that actually goes into it.
   </a>
 </div>
 
-There's also a Gmail-shaped operator inbox in [`inbox/`](inbox/). Run `cd inbox && npm run dev` and open `http://localhost:3775`.
+There's also a Gmail-shaped operator inbox for watching agent traffic, verifying signatures, and replying inline. Full setup walkthrough — including the auth-on path — is in [`inbox/README.md`](inbox/README.md).
+
+<p align="center">
+  <a href="inbox/README.md"><img src="./assets/inbox.png" alt="Bindu inbox — three-pane layout for A2A traffic" width="720" /></a>
+</p>
 
 <br/>
 
