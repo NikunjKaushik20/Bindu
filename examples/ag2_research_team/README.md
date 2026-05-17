@@ -25,7 +25,7 @@ With `AUTH__ENABLED=false`:
 ```bash
 curl -sS http://localhost:3773/ \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"kind":"text","text":"What are the main trade-offs between Postgres and DynamoDB for a multi-tenant SaaS?"}],"kind":"message","messageId":"m1","contextId":"c1","taskId":"t1"}}}'
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"00000000-0000-0000-0000-000000000004","params":{"message":{"role":"user","parts":[{"kind":"text","text":"What are the main trade-offs between Postgres and DynamoDB for a multi-tenant SaaS?"}],"kind":"message","messageId":"00000000-0000-0000-0000-000000000001","contextId":"00000000-0000-0000-0000-000000000002","taskId":"00000000-0000-0000-0000-000000000003"},"configuration":{"acceptedOutputModes":["application/json"]}}}'
 ```
 
 Then `tasks/get` with the same `taskId`. GroupChat handoffs add latency — expect 30–90s for a real research task.

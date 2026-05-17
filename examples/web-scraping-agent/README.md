@@ -28,7 +28,7 @@ With `AUTH__ENABLED=false`:
 ```bash
 curl -sS http://localhost:3773/ \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Scrape https://example.com — extract the page title and first paragraph."}],"kind":"message","messageId":"m1","contextId":"c1","taskId":"t1"}}}'
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"00000000-0000-0000-0000-000000000004","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Scrape https://example.com — extract the page title and first paragraph."}],"kind":"message","messageId":"00000000-0000-0000-0000-000000000001","contextId":"00000000-0000-0000-0000-000000000002","taskId":"00000000-0000-0000-0000-000000000003"},"configuration":{"acceptedOutputModes":["application/json"]}}}'
 ```
 
 Then `tasks/get` for the JSON. Re-running with the same URL hits Mem0 first — the agent will say "already scraped this" instead of re-fetching.

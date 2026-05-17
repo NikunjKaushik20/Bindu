@@ -48,7 +48,7 @@ With `AUTH__ENABLED=false`, hit joke_agent on its port:
 ```bash
 curl -sS http://localhost:3773/ \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"kind":"text","text":"tell me a joke about cats"}],"kind":"message","messageId":"m1","contextId":"c1","taskId":"t1"}}}'
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"00000000-0000-0000-0000-000000000004","params":{"message":{"role":"user","parts":[{"kind":"text","text":"tell me a joke about cats"}],"kind":"message","messageId":"00000000-0000-0000-0000-000000000001","contextId":"00000000-0000-0000-0000-000000000002","taskId":"00000000-0000-0000-0000-000000000003"},"configuration":{"acceptedOutputModes":["application/json"]}}}'
 ```
 
 With auth on, sign each body with the agent's DID key — see [`docs/AUTH.md`](../../docs/AUTH.md). The Hydra smoke test in `hydra_smoke_test.sh` is a good place to start if auth is misbehaving.

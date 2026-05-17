@@ -36,7 +36,7 @@ Without auth, the same plain curl as every other example works:
 ```bash
 curl -sS http://localhost:3773/ \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Summarize bindu in one sentence."}],"kind":"message","messageId":"m1","contextId":"c1","taskId":"t1"}}}'
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"00000000-0000-0000-0000-000000000004","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Summarize bindu in one sentence."}],"kind":"message","messageId":"00000000-0000-0000-0000-000000000001","contextId":"00000000-0000-0000-0000-000000000002","taskId":"00000000-0000-0000-0000-000000000003"},"configuration":{"acceptedOutputModes":["application/json"]}}}'
 ```
 
 ## Heads-up

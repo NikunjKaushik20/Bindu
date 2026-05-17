@@ -27,7 +27,7 @@ With `AUTH__ENABLED=false`:
 ```bash
 curl -sS http://localhost:3773/ \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"message/send","id":"1","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Generate a short CBT exercise for managing test anxiety."}],"kind":"message","messageId":"m1","contextId":"c1","taskId":"t1"}}}'
+  -d '{"jsonrpc":"2.0","method":"message/send","id":"00000000-0000-0000-0000-000000000004","params":{"message":{"role":"user","parts":[{"kind":"text","text":"Generate a short CBT exercise for managing test anxiety."}],"kind":"message","messageId":"00000000-0000-0000-0000-000000000001","contextId":"00000000-0000-0000-0000-000000000002","taskId":"00000000-0000-0000-0000-000000000003"},"configuration":{"acceptedOutputModes":["application/json"]}}}'
 ```
 
 The Drafter → SafetyGuardian → ClinicalCritic → Supervisor loop takes 60–180s. Poll `tasks/get` with a generous timeout — by default the harness times out at 60s and the workflow is still in `working` state. Use ≥180s.
