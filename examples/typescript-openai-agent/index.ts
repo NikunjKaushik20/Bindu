@@ -16,7 +16,8 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
 });
 
 // bindufy — one call, full microservice
@@ -33,11 +34,12 @@ bindufy(
       cors_origins: ["http://localhost:5173"],
     },
     skills: ["skills/question-answering"],
+    coreAddress: "localhost:4774",
   },
   async (messages: ChatMessage[]) => {
     // Call OpenAI GPT-4o
     const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o",
+      model: process.env.OPENAI_MODEL || "openai/gpt-4o-mini",
       messages: messages.map((m) => ({
         role: m.role as "user" | "assistant" | "system",
         content: m.content,

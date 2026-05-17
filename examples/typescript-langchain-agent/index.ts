@@ -23,8 +23,10 @@ dotenv.config();
 
 // Create LangChain agent — this is the developer's choice
 const llm = new ChatOpenAI({
-  model: "gpt-4o",
+  model: "openai/gpt-4o-mini",
   temperature: 0.7,
+  apiKey: process.env.OPENROUTER_API_KEY,
+  configuration: { baseURL: "https://openrouter.ai/api/v1" },
 });
 
 // bindufy — one call, full microservice
@@ -40,6 +42,7 @@ bindufy(
       cors_origins: ["http://localhost:5173"],
     },
     skills: ["skills/research"],
+    coreAddress: "localhost:4774",
     capabilities: {
       streaming: false,
       push_notifications: false,

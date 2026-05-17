@@ -69,6 +69,7 @@ bindufy(
       cors_origins: ["http://localhost:5173"],
     },
     skills: ["skills/quiz-generation"],
+    coreAddress: "localhost:4774",
     capabilities: {
       streaming: false,
       push_notifications: false,
