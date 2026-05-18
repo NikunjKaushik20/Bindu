@@ -169,6 +169,32 @@ Then poll `tasks/get` with the same `taskId` until state hits `completed`.
 
 <br/>
 
+## Security: three layers, on by default
+
+Most agent frameworks treat security as your problem. Bindu treats it as transport.
+
+When an A2A request lands on a Bindu agent, three different middlewares fire before your handler sees the body — and each one answers a question the other two cannot:
+
+| Layer | The question it answers | What it actually is |
+|---|---|---|
+| **mTLS** | _Is the socket itself encrypted and mutually authenticated?_ | X.509 cert from [Smallstep step-ca](https://smallstep.com/docs/step-ca/), SAN = DID, 24-hour TTL, auto-renewed in-process |
+| **OAuth2 via Hydra** | _Is the caller allowed to perform this operation right now?_ | Ed-style bearer token, ~1-hour TTL, validated via [Ory Hydra](https://www.ory.sh/hydra/) introspection |
+| **DID signature** | _Was this exact JSON body authored by the DID it claims?_ | Ed25519 signature over canonical body, carried in `X-DID-Signature` |
+
+You don't pick one. You don't bolt them on. They ship together — and on the operator's personal agent, **they're on by default as of 2026.21.1**.
+
+Why three layers, not one? Because each fails safe in a way the others can't:
+
+- An attacker who steals a bearer token still can't decrypt your traffic — mTLS owns the wire.
+- An attacker who somehow forges a cert still can't impersonate a DID — the signature won't verify against the claimed key.
+- An attacker who breaks the signature scheme entirely still can't get past Hydra's authorization check.
+
+The cert lives at the socket. The bearer token lives in the header. The signature lives in the body. Each one rejects a class of attack the others are blind to. **No agent framework we surveyed ships all three out of the box.**
+
+→ **The full story:** [docs/SECURITY_STACK.md](docs/SECURITY_STACK.md) walks through what each layer does, how a single request flows through all three, today's defaults, the five real bugs we hit shipping default-on mTLS, and a troubleshooting matrix.
+
+<br/>
+
 ## Features
 
 Every row here links out to the guide that actually goes into it.
@@ -176,8 +202,9 @@ Every row here links out to the guide that actually goes into it.
 | Feature | What it does | Docs |
 |---|---|---|
 | **A2A JSON-RPC** | The protocol other agents already speak. `message/send`, `tasks/get`, `message/stream` on port 3773. | — |
-| **DID identity** | Every response your agent sends is signed with an Ed25519 key. Callers verify with a W3C DID — there's no shared secret to leak. | [DID.md](docs/DID.md) |
-| **OAuth2 via Hydra** | Scoped tokens (`agent:read`, `agent:write`, `agent:execute`) instead of one bearer that opens every door. | [AUTHENTICATION.md](docs/AUTHENTICATION.md) |
+| **mTLS transport** | The socket is encrypted and mutually authenticated. Each agent gets a real X.509 cert from step-ca (SAN = DID), serves uvicorn over TLS, and renews itself every ~16 hours. On by default for the inbox personal agent in 2026.21.1. | [SECURITY_STACK.md](docs/SECURITY_STACK.md) · [MTLS_DEPLOYMENT_GUIDE.md](docs/MTLS_DEPLOYMENT_GUIDE.md) |
+| **DID identity** | Every response your agent sends is signed with an Ed25519 key. Callers verify with a W3C DID — there's no shared secret to leak, no central authority to query, and the same DID is the cert's SAN, the OAuth2 client_id, and the message signer. All three have to agree, or the request is rejected. | [DID.md](docs/DID.md) |
+| **OAuth2 via Hydra** | Scoped bearer tokens (`agent:read`, `agent:write`, `agent:execute`) instead of one key that opens every door. Each agent self-registers as a Hydra client at boot — its DID IS its client_id, so authorization, identity, and transport-layer cert all point at the same actor. | [AUTHENTICATION.md](docs/AUTHENTICATION.md) |
 | **x402 payments** | Flip a flag and the agent demands USDC before your handler ever sees the request. **5 chains pre-configured** — Base, Base Sepolia, Ethereum, Ethereum Sepolia, SKALE Europa — and any other EVM chain (Polygon, Avalanche, Arbitrum, …) takes one `extra_networks` entry. | [PAYMENT.md](docs/PAYMENT.md) |
 | **Push notifications** | The agent webhooks you when a task changes state. Stop polling. | [NOTIFICATIONS.md](docs/NOTIFICATIONS.md) |
 | **Skills system** | Declare what your agent can do; callers see it on the agent card before they spend a token asking. | [SKILLS.md](docs/SKILLS.md) |
@@ -247,8 +274,10 @@ If your model provider speaks the OpenAI or Anthropic API, it works — [OpenRou
 ## Documentation
 
 - [Full docs site](https://docs.getbindu.com)
+- [Security stack — mTLS + Hydra + DID](docs/SECURITY_STACK.md) — how the three identity layers compose, with a live walkthrough using the gateway test fleet
 - [Calling a secured agent](docs/AUTH.md) — the shortest path: the two things you do when auth is on (token + DID signature), in one page
 - [Auth — long form](docs/AUTHENTICATION.md) and [DID signing — long form](docs/DID.md) — when the short version isn't enough
+- [mTLS deployment](docs/MTLS_DEPLOYMENT_GUIDE.md) — DevOps-facing guide for standing up step-ca, OIDC provisioner config, and the cert lifecycle
 - [Cloud deployment](docs/runtime/quickstart.md) — `bindu deploy` walkthrough
 - [Gateway](docs/GATEWAY.md) — multi-agent orchestration
 - [Private skills](docs/PRIVATE_SKILLS.md) — hide your commercial menu from the public catalog; show it only to allowlisted partner DIDs
